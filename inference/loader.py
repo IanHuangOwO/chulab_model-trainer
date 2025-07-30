@@ -1,51 +1,66 @@
-"""
-Usage:
-python train.py \
-  --img_path ./datas/TH/YYC_20230922/training_data/raw_data \
-  --mask_path ./datas/TH/YYC_20230922/training_data/raw_mask \
-  --save_path ./datas/TH/YYC_20230922/weights \
-  --model_name contrast_bias_shift_scale.pth \
-  --epochs 30
-  --batch_size 8
-"""
+from monai.data.dataset import Dataset
 
-import argparse
-import os
-import sys
-import logging
-import torch
-import numpy as np
-from sklearn.model_selection import train_test_split
+class MicroscopyDataset2D(Dataset):
+    """
+    Custom PyTorch Dataset for 2D microscopy image segmentation.
+    Supports MONAI or custom transforms.
+    """
+    def __init__(self, patch_dicts, transform=None):
+        """
+        Args:
+            patch_dicts (list of dict): Each dict has keys 'image' and 'mask'.
+            transform (callable, optional): Transform to apply on a sample dict.
+        """
+        self.patch_dicts = patch_dicts
+        self.transform = transform
+        
+    def __len__(self):
+        return len(self.patch_dicts)
 
-from monai.transforms.compose import Compose
-from monai.transforms.utility.dictionary import ToTensord
-from monai.transforms.spatial.dictionary import RandFlipd, RandZoomd, RandAffined
-from monai.transforms.intensity.dictionary import ScaleIntensityRanged, RandAdjustContrastd, RandBiasFieldd, RandShiftIntensityd, RandScaleIntensityd
-from monai.transforms.post.dictionary import AsDiscreted
-from monai.data.dataloader import DataLoader
+    def __getitem__(self, idx):
+        sample = self.patch_dicts[idx]
 
-from train.loader import MicroscopyDataset3D
-from train.trainer import Trainer
-from utils.reader import FileReader
-from utils.cropper import extract_training_batches
+        # Apply transform if provided
+        if self.transform:
+            sample = self.transform(sample)
+            
+        image = sample["image"]
+        mask = sample["mask"]
 
-from models.UNet_3D import UNet3D
+        # Manually add channel dimension if missing
+        if image.ndim == 2:  # shape: [H, W] → [1, H, W]
+            image = image.unsqueeze(0)
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+        return image
 
-# Dict-based transform
-train_transform = Compose([
-    ScaleIntensityRanged(keys=["image"], a_min=0, a_max=2000, b_min=0.0, b_max=1.0, clip=True),
-    RandFlipd(keys=["image", "mask"], spatial_axis=1, prob=0.5),
-    RandAffined(keys=["image", "mask"], prob=0.5, rotate_range=(0, 0, 0.1), scale_range=(0.9, 1.1, 1)),
-    RandAdjustContrastd(keys=["image"], prob=0.3),
-    RandBiasFieldd(keys=["image"], prob=0.2),
-    RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.3),
-    RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.3),
-    RandZoomd(keys=["image", "mask"], min_zoom=0.9, max_zoom=1.1, prob=0.2),
-    AsDiscreted(keys=["mask"], threshold=1),
-    ToTensord(keys=["image", "mask"], dtype=torch.float32),
-])
+class MicroscopyDataset3D(Dataset):
+    """
+    Custom PyTorch Dataset for 3D microscopy image segmentation.
+    Supports MONAI or custom transforms.
+    """
+    def __init__(self, patch_dicts, transform=None):
+        """
+        Args:
+            patch_dicts (list of dict): Each dict has keys 'image' and 'mask'.
+            transform (callable, optional): Transform to apply on a sample dict.
+        """
+        self.patch_dicts = patch_dicts
+        self.transform = transform
+        
+    def __len__(self):
+        return len(self.patch_dicts)
 
-val_transform = Com
+    def __getitem__(self, idx):
+        sample = self.patch_dicts[idx]
+
+        # Apply transform if provided
+        if self.transform:
+            sample = self.transform(sample)
+            
+        image = sample["image"]
+
+        # Manually add channel dimension if missing
+        if image.ndim == 3:  # shape: [D, H, W] → [1, D, H, W]
+            image = image.unsqueeze(0)
+
+        return image

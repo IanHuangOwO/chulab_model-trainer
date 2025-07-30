@@ -1,0 +1,10 @@
+zarr
+dask
+nibabel
+tqdm
+monai[all]
+scikit-learn
+scikit-image
+torch
+torchvision
+torchaudio

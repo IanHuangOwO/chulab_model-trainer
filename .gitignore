@@ -1,9 +1,10 @@
 __pycache__/
 *.log
 *.pyc
-.tiff
-.tif
-.gz
-.pth
+*.tiff
+*.tif
+*.gz
+*.pth
 .env
 .devcontainer/
+docker-compose.yml
