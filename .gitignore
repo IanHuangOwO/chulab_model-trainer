@@ -1,0 +1,9 @@
+__pycache__/
+*.log
+*.pyc
+.tiff
+.tif
+.gz
+.pth
+.env
+.devcontainer/
