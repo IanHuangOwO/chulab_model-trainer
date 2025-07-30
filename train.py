@@ -5,8 +5,8 @@ python train.py \
   --mask_path ./datas/TH/YYC_20230922/training_data/raw_mask \
   --save_path ./datas/TH/YYC_20230922/weights \
   --model_name contrast_bias_shift_scale.pth \
-  --epochs 30
-  --batch_size 8
+  --training_epochs 30
+  --training_batch_size 8
 """
 
 import argparse

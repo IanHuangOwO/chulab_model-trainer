@@ -1,8 +1,9 @@
 zarr
 dask
+imagecodecs
 nibabel
 tqdm
-monai[all]
+monai
 scikit-learn
 scikit-image
 torch
