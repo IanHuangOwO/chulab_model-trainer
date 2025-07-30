@@ -1,145 +1,95 @@
-"""
-Usage:
-python inference.py \
-  --img_path ./datas/TH/YYC_20230922/testing_data/raw_data \
-  --mask_path ./datas/TH/YYC_20230922/testing_data/raw_mask \
-  --model_path ./datas/TH/YYC_20230922/weights/contrast_bias_shift_scale.pth \
-  --output_type scroll-tiff
-"""
+import numpy as np
+from skimage.transform import resize
 
-import argparse
-import os
-import sys
-import logging
-import torch
-
-from monai.transforms.compose import Compose
-from monai.transforms.utility.dictionary import ToTensord
-from monai.transforms.intensity.dictionary import ScaleIntensityRanged
-from monai.data.dataloader import DataLoader
-
-from inference.loader import MicroscopyDataset3D
-from inference.inferencer import Inferencer
-from utils.reader import FileReader
-from utils.writer import FileWriter
-from utils.cropper import extract_patches
-from utils.stitcher import stitch_image
-
-from models.UNet_3D import UNet3D
-
-# Setup logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
-# Define transforms for inference
-inference_transform = Compose([
-    ScaleIntensityRanged(keys=["image"], a_min=0, a_max=2000, b_min=0.0, b_max=1.0, clip=True),
-    ToTensord(keys=["image"], dtype=torch.float32),
-])
-
-# Utility Function 
-def load_model(model_path):
+def stitch_image_xy(patches, positions, original_shape, patch_size, resize_factor=(1, 1, 1)):
     """
-    Load a PyTorch model from a given file path.
-
-    Parameters:
-    ----------
-    model_path : str
-        Path to the saved model file (.pt or .pth).
-
-    Returns:
-    -------
-    model : torch.nn.Module
-        Loaded PyTorch model object.
-
-    Raises:
-    ------
-    FileNotFoundError:
-        If the model file does not exist at the specified path.
-    """
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model file not found: {model_path}")
+    Reconstructs the full 3D image from patches using weighted averaging.
     
-    model = torch.load(model_path, weights_only=False)
-    return model
-
-def load_data(data_reader, z_start, patch_size, overlay, resize_factor):
-    """
-    Load a volume segment and extract inference-ready patches.
-
-    Parameters:
-    ----------
-    data_reader : FileReader
-        Object responsible for reading the image volume.
-    z_start : int
-        Starting z-index of the volume slice to load.
-    patch_size : tuple of int
-        Size of each patch (z, y, x) to extract from the volume.
-    overlay : tuple of int
-        Number of voxels to overlap between adjacent patches (z, y, x).
-    resize_factor : tuple of float
-        Scaling factor (z, y, x) to resize the data volume before patching.
-
-    Returns:
-    -------
-    inference_patches : list of dict
-        List of dictionaries containing the patch images under the key "image".
-    data_position : list of tuple
-        List of spatial positions corresponding to each patch.
-    """
-    data_volume = data_reader.read(z_start=z_start, z_end=z_start + patch_size[0])
+    Args:
+        patches (list or np.ndarray): List or array of 3D patches.
+        positions (list or np.ndarray): Corresponding (z, y, x) positions.
+        original_shape (tuple): Shape of the original image (D, H, W).
+        patch_size (tuple): Size of each patch (cd, ch, cw).
+        resize_factor (tuple): Resize factor used during patch extraction (default: no resize).
         
-    data_patches, data_position = extract_patches(array=data_volume, patch_size=patch_size, overlay=overlay, resize_factor=resize_factor, return_positions=True)
-    
-    inference_patches = [{"image": img} for img in data_patches]
-    
-    return inference_patches, data_position
-
-def compute_z_plan(volume_depth, patch_depth, z_overlap):
+    Returns:
+        np.ndarray: Reconstructed image of shape original_shape.
     """
-    Compute the list of z-slice starting positions for patch-wise inference.
+    reconstruction = np.zeros(original_shape, dtype=np.float32)
+    weight = np.zeros(original_shape, dtype=np.float32)
+    pd, ph, pw = patch_size
 
-    Parameters:
-    ----------
-    volume_depth : int
-        Total depth (z-dimension) of the input volume.
-    patch_depth : int
-        Depth of each patch to extract.
-    z_overlap : int
-        Overlap in the z-dimension between consecutive patches.
+    for patch, (d, h, w) in zip(patches, positions):
+        # Resize patch back to original patch size if it was resized
+        if resize_factor != (1, 1, 1):
+            patch = resize(
+                patch,
+                (pd, ph, pw),
+                order=1,
+                mode='reflect',
+                anti_aliasing=True,
+                preserve_range=True
+            ).astype(np.float32)
+
+        # Add patch to reconstruction
+        reconstruction[d:d+pd, h:h+ph, w:w+pw] += patch
+        weight[d:d+pd, h:h+ph, w:w+pw] += 1
+
+    # Avoid division by zero
+    weight[weight == 0] = 1
+    reconstruction /= weight
+
+    return reconstruction
+
+def stitch_image_z(reconstruction: np.ndarray, prev_z_slices: np.ndarray, threshold=0.5):
+    """
+    Blends overlapping Z slices across volumes.
+    
+    Args:
+        reconstruction (np.ndarray): Current 3D patch volume (Z, Y, X).
+        prev_z_slices (np.ndarray or None): Last Z-overlap slices from previous volume.
+        z_overlay (int): Number of Z slices to blend.
+        threshold (float): Threshold for binary mask.
 
     Returns:
-    -------
-    patches : list of tuple
-        A list of tuples (z_start, z_overlay) indicating the starting z-slice 
-        and the overlap for each patch. An overlay of -1 indicates the last patch.
+        binary_mask (np.ndarray): Thresholded binary mask of shape (Z, Y, X).
     """
-    assert patch_depth > 0 and z_overlap >= 0
-    assert patch_depth > z_overlap
-
-    step = patch_depth - z_overlap
-    patches = []
-    z = 0
-
-    while z + patch_depth <= volume_depth:
-        if z + patch_depth == volume_depth:
-            patches.append((z, -1))
+    if prev_z_slices is None:
+        return (reconstruction > threshold).astype(np.uint8)
+    else:
+        if len(prev_z_slices.shape) < 3:
+            z_overlay = 1
         else:
-            patches.append((z, z_overlap))
-            
-        z += step
-    
-    if not patches or patches[-1][1] != -1:
-        last_start = volume_depth - patch_depth
-        if patches:
-            patches[-1] = (patches[-1][0], patches[-1][0] + patch_depth - last_start)
-            
-        patches.append((last_start, -1))
+            z_overlay = prev_z_slices.shape[0]
         
-    return patches
-    
-def main():
-    parser = argparse.ArgumentParser(
-        description="3D Mask Inference: Applies a trained model to infer masks from 3D images and outputs multi-resolution results."
-    )
+        if prev_z_slices.shape != reconstruction[:z_overlay].shape:
+            raise ValueError(f"Shape mismatch between previous and current Z slices.")
+        reconstruction[:z_overlay] = (
+            reconstruction[:z_overlay] + prev_z_slices
+        ) / 2
 
-   
+    return (reconstruction > threshold).astype(np.uint8)
+
+def stitch_image(patches, positions, original_shape, patch_size, resize_factor=(1, 1, 1), prev_z_slices=None, z_overlay=0):
+    """
+    Stitch patches into a full image with optional Z slice blending.
+    
+    Args:
+        patches (list or np.ndarray): List or array of 3D patches.
+        positions (list or np.ndarray): Corresponding (z, y, x) positions.
+        original_shape (tuple): Shape of the original image (D, H, W).
+        patch_size (tuple): Size of each patch (cd, ch, cw).
+        resize_factor (tuple): Resize factor used during patch extraction.
+        prev_z_slices (np.ndarray or None): Last Z slices from previous volume.
+        z_overlay (int): Number of Z slices to blend.
+
+    Returns:
+        np.ndarray: Reconstructed full image.
+    """
+    reconstruct_xy = stitch_image_xy(patches, positions, original_shape, patch_size, resize_factor)
+    reconstruction = stitch_image_z(reconstruct_xy, prev_z_slices) # type: ignore
+    
+    if z_overlay > 0:
+        return reconstruction[:-z_overlay], reconstruction[-z_overlay:]
+    else:
+        return reconstruction, None
