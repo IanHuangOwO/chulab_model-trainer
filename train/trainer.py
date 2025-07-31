@@ -51,7 +51,7 @@ class Trainer:
             progress_bar.set_postfix(loss=loss.item())
 
         avg_loss = epoch_loss / len(self.train_loader)
-        self.metrics_history["loss"]["train_loss"].append(avg_loss)
+        self.metrics_history["loss"]["train"].append(avg_loss)
         return avg_loss
 
     def validate_epoch(self, epoch):
@@ -68,7 +68,7 @@ class Trainer:
                 progress_bar.set_postfix(loss=loss.item())
 
         avg_loss = val_loss / len(self.val_loader)
-        self.metrics_history["loss"]["val_loss"].append(avg_loss)
+        self.metrics_history["loss"]["val"].append(avg_loss)
         return avg_loss
 
     def train(self, epochs=30):
@@ -86,7 +86,7 @@ class Trainer:
             if val_loss < self.best_val_loss:
                 self.best_val_loss = val_loss
                 
-                model_path = os.path.join(self.save_path, self.model_name, ".pth")
+                model_path = os.path.join(self.save_path, f"{self.model_name}.pth")
                 torch.save(self.model, model_path)
                 logger.info("✅ Model Saved!")
             
@@ -113,9 +113,7 @@ class Trainer:
         plt.legend()
         plt.grid(True)
 
-        figure_name = f"{metric_name}_curve.png"
+        figure_name = f"{self.model_name}-{metric_name}_curve.png"
         figure_path = os.path.join(self.save_path, figure_name)
         plt.savefig(figure_path)
         plt.close()
-
-        logger.info("%s curve saved to %s", metric_name.capitalize(), figure_path)

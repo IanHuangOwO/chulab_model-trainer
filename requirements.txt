@@ -3,6 +3,7 @@ dask
 imagecodecs
 nibabel
 tqdm
+matplotlib
 monai
 scikit-learn
 scikit-image

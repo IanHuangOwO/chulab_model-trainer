@@ -4,9 +4,12 @@ python train.py \
   --img_path ./datas/TH/YYC_20230922/training_data/raw_data \
   --mask_path ./datas/TH/YYC_20230922/training_data/raw_mask \
   --save_path ./datas/TH/YYC_20230922/weights \
-  --model_name contrast_bias_shift_scale.pth \
-  --training_epochs 30
-  --training_batch_size 8
+  --model_name resize \
+  --training_epochs 10 \
+  --training_batch_size 8 \
+  --training_patch_size 16 128 128 \
+  --training_overlay 2 4 4 \
+  --training_resize_factor 1 0.5 0.5 
 """
 
 import argparse
@@ -15,6 +18,7 @@ import sys
 import logging
 import torch
 import numpy as np
+from skimage.filters import gaussian
 from sklearn.model_selection import train_test_split
 
 from monai.transforms.compose import Compose
@@ -76,6 +80,10 @@ def load_data(img_path, mask_path, patch_size, overlay, resize_factor):
 
         mask_reader = FileReader(mask_folder_path)
         mask_volume = mask_reader.read(z_start=0, z_end=mask_reader.volume_shape[0]).astype(np.float32)
+        
+        mask_volume[mask_volume > 0] = 1
+        mask_volume = gaussian(mask_volume, sigma=1.2)
+        mask_volume[mask_volume > 0.5] = 1
         
         img_p, mask_p = extract_training_batches(
             image=img_volume, 
@@ -168,10 +176,8 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=args.training_batch_size, shuffle=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=args.training_batch_size, shuffle=True, num_workers=4)
     
-    logging.info("Finished loading data.")
-    
     model = UNet3D(in_channels=1, out_channels=1)
-    
+
     trainer = Trainer(
         model=model,
         train_loader=train_loader, 
@@ -181,14 +187,14 @@ def main():
     )
 
     logging.info("Starting training...")
-    
+
     trainer.train(epochs=args.training_epochs)
-    
+
     logging.info("Training completed. Model saved to %s", args.save_path)
 
     trainer.save_figure(metric_name="loss")
 
-    logging.info("Loss curve saved to %s", args.save_path)
+    logging.info("All figure saved to %s", args.save_path)
 
 if __name__ == "__main__":
     sys.exit(main())

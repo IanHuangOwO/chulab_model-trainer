@@ -51,7 +51,7 @@ def extract_patches(
                     )
                     patch = resize(
                         patch, new_shape,
-                        order=1,  # linear interpolation
+                        order=0,
                         mode='reflect',
                         anti_aliasing=True,
                         preserve_range=True
