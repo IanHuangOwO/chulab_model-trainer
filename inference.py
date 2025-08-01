@@ -1,16 +1,31 @@
 """
-Usage:
+Usage 3D:
 python inference.py \
   --img_path ./datas/TH/YYC_20230922/testing_data/raw_data \
   --mask_path ./datas/TH/YYC_20230922/testing_data/raw_mask \
-  --model_path ./datas/TH/YYC_20230922/weights/contrast_bias_shift_scale.pth \
-  --output_type scroll-tiff
+  --model_path ./datas/TH/YYC_20230922/weights/resize.pth \
+  --output_type scroll-tiff \
+  --inference_patch_size 16 64 64 \
+  --inference_overlay 2 4 4 \
+  --inference_resize_factor 1 1 1 
+  
+Usage 2D:
+python inference.py \
+  --img_path ./datas/TH/YYC_20230922/testing_data/raw_data \
+  --mask_path ./datas/TH/YYC_20230922/testing_data/raw_mask \
+  --model_path ./datas/TH/YYC_20230922/weights/resize.pth \
+  --output_type scroll-tiff \
+  --inference_patch_size 1 64 64 \
+  --inference_overlay 0 4 4 \
+  --inference_resize_factor 1 1 1
 """
+# Setup logging
+import logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 import argparse
 import os
 import sys
-import logging
 import torch
 
 from monai.transforms.compose import Compose
@@ -18,17 +33,20 @@ from monai.transforms.utility.dictionary import ToTensord
 from monai.transforms.intensity.dictionary import ScaleIntensityRanged
 from monai.data.dataloader import DataLoader
 
-from inference.loader import MicroscopyDataset3D
 from inference.inferencer import Inferencer
 from utils.reader import FileReader
 from utils.writer import FileWriter
 from utils.cropper import extract_patches
 from utils.stitcher import stitch_image
 
+# Model
+from models.UNet_2D import UNet2D
 from models.UNet_3D import UNet3D
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+# Dataset Choose
+from inference.loader import MicroscopyDataset3D, MicroscopyDataset2D
+
+DATASET = MicroscopyDataset2D
 
 # Define transforms for inference
 inference_transform = Compose([
@@ -243,7 +261,7 @@ def main():
             resize_factor=inference_resize_factor
         )
         
-        inference_dataset = MicroscopyDataset3D(inference_patches, transform=inference_transform)
+        inference_dataset = DATASET(inference_patches, transform=inference_transform)
         inference_loader = DataLoader(inference_dataset, batch_size=8, shuffle=False, num_workers=4)
         
         logging.info(f"Inferencing ...")

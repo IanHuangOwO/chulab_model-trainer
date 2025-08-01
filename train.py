@@ -1,21 +1,36 @@
 """
-Usage:
+Usage 3D:
 python train.py \
   --img_path ./datas/TH/YYC_20230922/training_data/raw_data \
   --mask_path ./datas/TH/YYC_20230922/training_data/raw_mask \
   --save_path ./datas/TH/YYC_20230922/weights \
-  --model_name resize \
+  --model_name TH \
   --training_epochs 10 \
   --training_batch_size 8 \
-  --training_patch_size 16 128 128 \
+  --training_patch_size 16 64 64 \
   --training_overlay 2 4 4 \
-  --training_resize_factor 1 0.5 0.5 
+  --training_resize_factor 1 1 1 
+  
+Usage 2D:
+python train.py \
+  --img_path ./datas/TH/YYC_20230922/training_data/raw_data \
+  --mask_path ./datas/TH/YYC_20230922/training_data/raw_mask \
+  --save_path ./datas/TH/YYC_20230922/weights \
+  --model_name TH \
+  --training_epochs 10 \
+  --training_batch_size 8 \
+  --training_patch_size 1 64 64 \
+  --training_overlay 0 4 4 \
+  --training_resize_factor 1 1 1 
 """
+
+# Setup logging
+import logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 import argparse
 import os
 import sys
-import logging
 import torch
 import numpy as np
 from skimage.filters import gaussian
@@ -28,15 +43,20 @@ from monai.transforms.intensity.dictionary import ScaleIntensityRanged, RandAdju
 from monai.transforms.post.dictionary import AsDiscreted
 from monai.data.dataloader import DataLoader
 
-from train.loader import MicroscopyDataset3D
 from train.trainer import Trainer
 from utils.reader import FileReader
 from utils.cropper import extract_training_batches
 
+# Model Choose
+from models.UNet_2D import UNet2D
 from models.UNet_3D import UNet3D
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+MODEL = UNet2D
+
+# Dataset Choose
+from train.loader import MicroscopyDataset3D, MicroscopyDataset2D
+
+DATASET = MicroscopyDataset2D
 
 # Dict-based transform
 train_transform = Compose([
@@ -65,7 +85,39 @@ val_transform = Compose([
     ToTensord(keys=["image", "mask"], dtype=torch.float32),
 ])
 
+
+# Load data test and mess with how to preprocess image and mask
 def load_data(img_path, mask_path, patch_size, overlay, resize_factor):
+    """
+    Loads and preprocesses 3D image and mask volumes from the specified directories, 
+    applies Gaussian smoothing and binarization to the masks, extracts 2D patches, 
+    and returns them for training.
+
+    Parameters:
+    ----------
+    img_path : str
+        Path to the folder containing subfolders of image volumes.
+        
+    mask_path : str
+        Path to the folder containing subfolders of corresponding mask volumes.
+
+    patch_size : tuple of int
+        The size of the extracted 2D patches, e.g., (256, 256).
+
+    overlay : int
+        The number of pixels by which patches should overlap during extraction.
+
+    resize_factor : float
+        Factor by which to downsample the image and mask before patch extraction.
+
+    Returns:
+    -------
+    image_patches : list of np.ndarray
+        A list of extracted image patches.
+
+    mask_patches : list of np.ndarray
+        A list of corresponding mask patches, preprocessed (binarized and smoothed).
+    """
     volume_dirs = sorted([name for name in os.listdir(img_path)])
     
     image_patches = []
@@ -83,36 +135,20 @@ def load_data(img_path, mask_path, patch_size, overlay, resize_factor):
         
         mask_volume[mask_volume > 0] = 1
         mask_volume = gaussian(mask_volume, sigma=1.2)
-        mask_volume[mask_volume > 0.5] = 1
+        mask_volume[mask_volume > 0.3] = 1
         
         img_p, mask_p = extract_training_batches(
-            image=img_volume, 
-            mask=mask_volume, 
-            patch_size=patch_size, 
-            overlay=overlay,
-            resize_factor=resize_factor,
-            balance=True
+            image=img_volume, mask=mask_volume, 
+            patch_size=patch_size, overlay=overlay, 
+            resize_factor=resize_factor, balance=True
         )
         
         image_patches.extend(img_p)
         mask_patches.extend(mask_p)
         
-    train_imgs, val_imgs, train_masks, val_masks = train_test_split(
-        image_patches, mask_patches, test_size=0.3, random_state=42
-    )
-    
-    train_patches = []
-    for img, mask in zip(train_imgs, train_masks):
-        patch = {"image": img, "mask": mask}
-        train_patches.append(patch)
-        
-    val_patches = []
-    for img, mask in zip(val_imgs, val_masks):
-        patch = {"image": img, "mask": mask}
-        val_patches.append(patch)
-        
-    return train_patches, val_patches
-    
+    return image_patches, mask_patches
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Train 3D U-Net for Microscopy Segmentation"
@@ -136,6 +172,14 @@ def main():
     )
     
     parser.add_argument(
+        "--training_input_channel", type=int, default=1,
+        help="Number of channels in the input image (e.g., 1 for grayscale, 3 for RGB)."
+    )
+    parser.add_argument(
+        "--training_output_channel", type=int, default=1,
+        help="Number of channels in the model output (e.g., 1 for binary segmentation, >1 for multi-class)."
+    )
+    parser.add_argument(
         "--training_epochs", type=int, default=30, 
         help="Number of training epochs (default: 30)"
     )
@@ -144,11 +188,11 @@ def main():
         help="Batch size for training (default: 8)"
     )
     parser.add_argument(
-        "--training_patch_size", type=int, default=[16, 64, 64], nargs=3, 
+        "--training_patch_size", type=int, default=[1, 64, 64], nargs=3, 
         help="Patch size (z, y, x) for model training. The image is processed in patches of this size."
     )
     parser.add_argument(
-        "--training_overlay", type=int, default=[2, 4, 4], nargs=3,
+        "--training_overlay", type=int, default=[0, 4, 4], nargs=3,
         help="Number of voxels to overlap (z, y, x) between adjacent patches during inference to avoid edge artifacts."
     )
     parser.add_argument(
@@ -168,16 +212,30 @@ def main():
     training_overlay = tuple(args.training_overlay)
     training_resize_factor = tuple(args.training_resize_factor)
     
-    train_patches, val_patches = load_data(img_root, mask_root, training_patch_size, training_overlay, training_resize_factor)
+    image_patches, mask_patches = load_data(img_root, mask_root, training_patch_size, training_overlay, training_resize_factor)
     
-    train_dataset = MicroscopyDataset3D(train_patches, transform=train_transform)
-    val_dataset = MicroscopyDataset3D(val_patches, transform=val_transform)
-
+    train_imgs, val_imgs, train_masks, val_masks = train_test_split(
+        image_patches, mask_patches, test_size=0.3, random_state=42
+    )
+    
+    train_patches = []
+    for img, mask in zip(train_imgs, train_masks):
+        patch = {"image": img, "mask": mask}
+        train_patches.append(patch)
+        
+    val_patches = []
+    for img, mask in zip(val_imgs, val_masks):
+        patch = {"image": img, "mask": mask}
+        val_patches.append(patch)
+    
+    train_dataset = DATASET(train_patches, transform=train_transform)
+    val_dataset = DATASET(val_patches, transform=val_transform)
+    
     train_loader = DataLoader(train_dataset, batch_size=args.training_batch_size, shuffle=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=args.training_batch_size, shuffle=True, num_workers=4)
     
-    model = UNet3D(in_channels=1, out_channels=1)
-
+    model = MODEL(in_channels=args.training_input_channel, out_channels=args.training_output_channel)
+    
     trainer = Trainer(
         model=model,
         train_loader=train_loader, 
