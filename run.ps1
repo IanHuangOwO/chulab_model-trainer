@@ -29,6 +29,8 @@ services:
       context: ./
       dockerfile: Dockerfile
     environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
       - NVIDIA_VISIBLE_DEVICES=all
     runtime: nvidia
     volumes:
