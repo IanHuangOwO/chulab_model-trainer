@@ -1,26 +1,26 @@
 """
 Usage 3D:
 python train.py \
-  --img_path ./datas/c-Fos/YYC/training-data_LI-AN-3D/images \
-  --mask_path ./datas/c-Fos/YYC/training-data_LI-AN-3D/masks \
+  --img_path ./datas/c-Fos/YYC/training-data/LI-AN-3D/images \
+  --mask_path ./datas/c-Fos/YYC/training-data/LI-AN-3D/masks \
   --save_path ./datas/c-Fos/YYC/weights \
   --model_name c-Fos \
   --training_epochs 10 \
   --training_batch_size 8 \
   --training_patch_size 16 64 64 \
-  --training_overlay 2 4 4 \
+  --training_overlay 0 0 0 \
   --training_resize_factor 1 1 1 
   
 Usage 2D:
 python train.py \
-  --img_path ./datas/TH/YYC_20230922/training_data/raw_data \
-  --mask_path ./datas/TH/YYC_20230922/training_data/raw_mask \
-  --save_path ./datas/TH/YYC_20230922/weights \
-  --model_name TH \
+  --img_path ./datas/c-Fos/YYC/training-data/LI-AN-3D/images \
+  --mask_path ./datas/c-Fos/YYC/training-data/LI-AN-3D/masks \
+  --save_path ./datas/c-Fos/YYC/weights \
+  --model_name c-Fos \
   --training_epochs 10 \
   --training_batch_size 8 \
   --training_patch_size 1 64 64 \
-  --training_overlay 0 4 4 \
+  --training_overlay 0 0 0 \
   --training_resize_factor 1 1 1 
 """
 
@@ -192,7 +192,7 @@ def main():
         help="Patch size (z, y, x) for model training. The image is processed in patches of this size."
     )
     parser.add_argument(
-        "--training_overlay", type=int, default=[0, 4, 4], nargs=3,
+        "--training_overlay", type=int, default=[0, 0, 0], nargs=3,
         help="Number of voxels to overlap (z, y, x) between adjacent patches during inference to avoid edge artifacts."
     )
     parser.add_argument(

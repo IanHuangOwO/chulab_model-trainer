@@ -7,6 +7,6 @@ matplotlib
 monai
 scikit-learn
 scikit-image
-torch
-torchvision
-torchaudio
+torch --index-url https://download.pytorch.org/whl/cu129
+torchvision --index-url https://download.pytorch.org/whl/cu129
+torchaudio --index-url https://download.pytorch.org/whl/cu129
