@@ -1,9 +1,9 @@
 """
 Usage 3D:
 python inference.py \
-  --img_path ./datas/TH/YYC_20230922/testing_data/raw_data \
-  --mask_path ./datas/TH/YYC_20230922/testing_data/raw_mask \
-  --model_path ./datas/TH/YYC_20230922/weights/resize.pth \
+  --img_path ./datas/c-Fos/YYC/testing-data/YYC_20230414-1/images \
+  --mask_path ./datas/c-Fos/YYC/testing-data/YYC_20230414-1/results \
+  --model_path ./datas/c-Fos/YYC/weights/c-Fos_200_LI_AN.pth \
   --output_type scroll-tiff \
   --inference_patch_size 16 64 64 \
   --inference_overlay 2 4 4 \
@@ -30,7 +30,7 @@ import torch
 
 from monai.transforms.compose import Compose
 from monai.transforms.utility.dictionary import ToTensord
-from monai.transforms.intensity.dictionary import ScaleIntensityRanged
+from monai.transforms.intensity.dictionary import NormalizeIntensityd
 from monai.data.dataloader import DataLoader
 
 from inference.inferencer import Inferencer
@@ -46,11 +46,11 @@ from models.UNet_3D import UNet3D
 # Dataset Choose
 from inference.loader import MicroscopyDataset3D, MicroscopyDataset2D
 
-DATASET = MicroscopyDataset2D
+DATASET = MicroscopyDataset3D
 
 # Define transforms for inference
 inference_transform = Compose([
-    ScaleIntensityRanged(keys=["image"], a_min=0, a_max=2000, b_min=0.0, b_max=1.0, clip=True),
+    NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
     ToTensord(keys=["image"], dtype=torch.float32),
 ])
 

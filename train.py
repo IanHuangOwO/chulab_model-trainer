@@ -1,10 +1,10 @@
 """
 Usage 3D:
 python train.py \
-  --img_path ./datas/TH/YYC_20230922/training_data/raw_data \
-  --mask_path ./datas/TH/YYC_20230922/training_data/raw_mask \
-  --save_path ./datas/TH/YYC_20230922/weights \
-  --model_name TH \
+  --img_path ./datas/c-Fos/YYC/training-data_LI-AN-3D/images \
+  --mask_path ./datas/c-Fos/YYC/training-data_LI-AN-3D/masks \
+  --save_path ./datas/c-Fos/YYC/weights \
+  --model_name c-Fos \
   --training_epochs 10 \
   --training_batch_size 8 \
   --training_patch_size 16 64 64 \
@@ -39,7 +39,7 @@ from sklearn.model_selection import train_test_split
 from monai.transforms.compose import Compose
 from monai.transforms.utility.dictionary import ToTensord
 from monai.transforms.spatial.dictionary import RandFlipd, RandZoomd, RandAffined
-from monai.transforms.intensity.dictionary import ScaleIntensityRanged, RandAdjustContrastd, RandBiasFieldd, RandShiftIntensityd, RandScaleIntensityd
+from monai.transforms.intensity.dictionary import NormalizeIntensityd, RandAdjustContrastd, RandBiasFieldd, RandShiftIntensityd, RandScaleIntensityd
 from monai.transforms.post.dictionary import AsDiscreted
 from monai.data.dataloader import DataLoader
 
@@ -51,16 +51,16 @@ from utils.cropper import extract_training_batches
 from models.UNet_2D import UNet2D
 from models.UNet_3D import UNet3D
 
-MODEL = UNet2D
+MODEL = UNet3D
 
 # Dataset Choose
 from train.loader import MicroscopyDataset3D, MicroscopyDataset2D
 
-DATASET = MicroscopyDataset2D
+DATASET = MicroscopyDataset3D
 
 # Dict-based transform
 train_transform = Compose([
-    ScaleIntensityRanged(keys=["image"], a_min=0, a_max=2000, b_min=0.0, b_max=1.0, clip=True),
+    NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
     RandFlipd(keys=["image", "mask"], spatial_axis=1, prob=0.5),
     RandAffined(keys=["image", "mask"], prob=0.5, rotate_range=(0, 0, 0.1), scale_range=(0.9, 1.1, 1)),
     RandAdjustContrastd(keys=["image"], prob=0.3),
@@ -73,7 +73,7 @@ train_transform = Compose([
 ])
 
 val_transform = Compose([
-    ScaleIntensityRanged(keys=["image"], a_min=0, a_max=2000, b_min=0.0, b_max=1.0, clip=True),
+    NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
     RandFlipd(keys=["image", "mask"], spatial_axis=1, prob=0.5),
     RandAffined(keys=["image", "mask"], prob=0.5, rotate_range=(0, 0, 0.1), scale_range=(0.9, 1.1, 1)),
     RandAdjustContrastd(keys=["image"], prob=0.3),
