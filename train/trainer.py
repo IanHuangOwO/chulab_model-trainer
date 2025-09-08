@@ -4,7 +4,7 @@ import os
 import logging
 from tqdm import tqdm
 
-from train.loss import dice_bce_loss, dice_loss
+from train.loss import dice_bce_loss, dice_loss, tversky_bce_loss, tversky_loss
 
 # Initialize logging
 logger = logging.getLogger(__name__)
@@ -38,7 +38,8 @@ class Trainer:
         progress_bar = tqdm(self.train_loader, desc=f"Training Epoch {epoch+1}", leave=False)
 
         for images, masks in progress_bar:
-            images, masks = images.to(self.device), masks.to(self.device)
+            images = images.to(self.device, non_blocking=True)
+            masks = masks.to(self.device, non_blocking=True)
 
             self.optimizer.zero_grad()
             outputs = self.model(images)
@@ -61,7 +62,8 @@ class Trainer:
 
         with torch.no_grad():
             for images, masks in progress_bar:
-                images, masks = images.to(self.device), masks.to(self.device)
+                images = images.to(self.device, non_blocking=True)
+                masks = masks.to(self.device, non_blocking=True)
                 outputs = self.model(images)
                 loss = dice_bce_loss(outputs, masks)
                 val_loss += loss.item()
@@ -89,10 +91,24 @@ class Trainer:
                 model_path = os.path.join(self.save_path, f"{self.model_name}.pth")
                 torch.save(self.model, model_path)
                 logger.info("✅ Model Saved!")
+
+            # Save figure after each epoch with error handling
+            try:
+                self.save_figure(metric_name="loss", epoch=epoch + 1)
+            except Exception as e:
+                logger.warning("Could not save figure at epoch %d: %s", epoch + 1, str(e))
             
-    def save_figure(self, metric_name="loss"):
-        """Save the training and validation curves for a given metric (e.g., loss, dice)."""
+    def save_figure(self, metric_name="loss", epoch=None):
+        """Save the training and validation curves for a given metric.
+
+        If `epoch` is provided, also save a uniquely named snapshot for that epoch
+        to avoid issues when a viewer has the last image open on Windows.
+        """
+        # Use a headless backend to avoid Tkinter threading errors on Windows
+        import matplotlib
+        matplotlib.use("Agg", force=True)
         import matplotlib.pyplot as plt
+        from datetime import datetime
 
         if metric_name not in self.metrics_history:
             logger.warning("Metric '%s' not found in metrics_history. Available keys: %s",
@@ -113,7 +129,16 @@ class Trainer:
         plt.legend()
         plt.grid(True)
 
-        figure_name = f"{self.model_name}-{metric_name}_curve.png"
-        figure_path = os.path.join(self.save_path, figure_name)
-        plt.savefig(figure_path)
+        base_name = f"{self.model_name}-{metric_name}_curve"
+        latest_path = os.path.join(self.save_path, f"{base_name}.png")
+
+        # Always try to update the latest figure; if it's open, fall back silently
+        try:
+            plt.savefig(latest_path)
+        except Exception as e:
+            logger.warning(
+                "Could not update latest figure '%s': %s. Will try epoch-specific name.",
+                latest_path, str(e)
+            )
+            
         plt.close()

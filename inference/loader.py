@@ -25,7 +25,7 @@ class MicroscopyDataset2D(Dataset):
             sample = self.transform(sample)
             
         image = sample["image"]
-
+        
         # Manually add channel dimension if missing
         if image.ndim == 2:  # shape: [H, W] → [1, H, W]
             image = image.unsqueeze(0)

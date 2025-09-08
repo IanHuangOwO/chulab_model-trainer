@@ -10,13 +10,13 @@ python inference.py \
   --inference_resize_factor 1 1 1 
   
 Usage 2D:
-python inference.py \
-  --img_path ./datas/TH/YYC_20230922/testing_data/raw_data \
-  --mask_path ./datas/TH/YYC_20230922/testing_data/raw_mask \
-  --model_path ./datas/TH/YYC_20230922/weights/resize.pth \
-  --output_type scroll-tiff \
-  --inference_patch_size 1 64 64 \
-  --inference_overlay 0 4 4 \
+python inference.py ^
+  --img_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V45/left/raw ^
+  --mask_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V45/left ^
+  --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/function-3.pth ^
+  --output_type scroll-tiff ^
+  --inference_patch_size 1 64 64 ^
+  --inference_overlay 0 4 4 ^
   --inference_resize_factor 1 1 1
 """
 # Setup logging
@@ -40,18 +40,18 @@ from utils.cropper import extract_patches
 from utils.stitcher import stitch_image
 
 # Model
-from models.UNet_2D import UNet2D
-from models.UNet_3D import UNet3D
+from models.UNet_2D_V2 import UNet2D
+from models.UNet_3D_V1 import UNet3D
 
 # Dataset Choose
 from inference.loader import MicroscopyDataset3D, MicroscopyDataset2D
 
-DATASET = MicroscopyDataset3D
+DATASET = MicroscopyDataset2D
 
 # Define transforms for inference
 inference_transform = Compose([
-    NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
     ToTensord(keys=["image"], dtype=torch.float32),
+    NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
 ])
 
 # Utility Function 
