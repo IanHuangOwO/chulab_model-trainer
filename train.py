@@ -16,7 +16,7 @@ python train.py ^
   --img_path ./datas/c-Fos/LI-WIN_PAPER/training-data/LI-AN-3D/images ^
   --mask_path ./datas/c-Fos/LI-WIN_PAPER/training-data/LI-AN-3D/masks ^
   --save_path ./datas/c-Fos/LI-WIN_PAPER/weights ^
-  --model_name NA ^
+  --model_name Normalized ^
   --training_epochs 100 ^
   --training_batch_size 48 ^
   --training_patch_size 1 64 64 ^
@@ -65,7 +65,7 @@ DATASET = MicroscopyDataset2D
 preproc_transform = Compose([
     # GaussianSmoothd(keys=["image"], sigma=1.0),
     # ScaleIntensityRanged(keys=["image"], a_min=0, a_max=2000, b_min=0.0, b_max=1.0, clip=True),
-    # NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
+    NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
     ToTensord(keys=["image", "mask"], dtype=torch.float32),
 ])
 

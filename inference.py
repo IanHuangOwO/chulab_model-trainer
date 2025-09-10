@@ -41,115 +41,9 @@ from utils.stitcher import stitch_image
 
 # Dataset Choose
 from inference.loader import MicroscopyDataset3D, MicroscopyDataset2D
+from tools import inference_transform, load_model, load_data, compute_z_plan
 
 DATASET = MicroscopyDataset2D
-
-# Define transforms for inference
-inference_transform = Compose([
-    ToTensord(keys=["image"], dtype=torch.float32),
-    NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
-])
-
-# Utility Function 
-def load_model(model_path):
-    """
-    Load a PyTorch model from a given file path.
-
-    Parameters:
-    ----------
-    model_path : str
-        Path to the saved model file (.pt or .pth).
-
-    Returns:
-    -------
-    model : torch.nn.Module
-        Loaded PyTorch model object.
-
-    Raises:
-    ------
-    FileNotFoundError:
-        If the model file does not exist at the specified path.
-    """
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model file not found: {model_path}")
-    
-    model = torch.load(model_path, weights_only=False)
-    return model
-
-def load_data(data_reader, z_start, patch_size, overlay, resize_factor):
-    """
-    Load a volume segment and extract inference-ready patches.
-
-    Parameters:
-    ----------
-    data_reader : FileReader
-        Object responsible for reading the image volume.
-    z_start : int
-        Starting z-index of the volume slice to load.
-    patch_size : tuple of int
-        Size of each patch (z, y, x) to extract from the volume.
-    overlay : tuple of int
-        Number of voxels to overlap between adjacent patches (z, y, x).
-    resize_factor : tuple of float
-        Scaling factor (z, y, x) to resize the data volume before patching.
-
-    Returns:
-    -------
-    inference_patches : list of dict
-        List of dictionaries containing the patch images under the key "image".
-    data_position : list of tuple
-        List of spatial positions corresponding to each patch.
-    """
-    data_volume = data_reader.read(z_start=z_start, z_end=z_start + patch_size[0])
-        
-    data_patches, data_position = extract_patches(array=data_volume, patch_size=patch_size, overlay=overlay, resize_factor=resize_factor, return_positions=True)
-    
-    inference_patches = [{"image": img} for img in data_patches]
-    
-    return inference_patches, data_position
-
-def compute_z_plan(volume_depth, patch_depth, z_overlap):
-    """
-    Compute the list of z-slice starting positions for patch-wise inference.
-
-    Parameters:
-    ----------
-    volume_depth : int
-        Total depth (z-dimension) of the input volume.
-    patch_depth : int
-        Depth of each patch to extract.
-    z_overlap : int
-        Overlap in the z-dimension between consecutive patches.
-
-    Returns:
-    -------
-    patches : list of tuple
-        A list of tuples (z_start, z_overlay) indicating the starting z-slice 
-        and the overlap for each patch. An overlay of -1 indicates the last patch.
-    """
-    assert patch_depth > 0 and z_overlap >= 0
-    assert patch_depth > z_overlap
-
-    step = patch_depth - z_overlap
-    patches = []
-    z = 0
-
-    while z + patch_depth <= volume_depth:
-        if z + patch_depth == volume_depth:
-            patches.append((z, -1))
-        else:
-            patches.append((z, z_overlap))
-            
-        z += step
-    
-    if not patches or patches[-1][1] != -1:
-        last_start = volume_depth - patch_depth
-        if patches:
-            patches[-1] = (patches[-1][0], patches[-1][0] + patch_depth - last_start)
-            
-        patches.append((last_start, -1))
-        
-    return patches
     
 def main():
     parser = argparse.ArgumentParser(
@@ -167,6 +61,12 @@ def main():
     parser.add_argument(
         "--model_path", type=str, required=True,
         help="Path to the trained 3D segmentation model (.pt or similar)."
+    )
+    parser.add_argument(
+        "--batch_size", type=int, default=8
+    )
+    parser.add_argument(
+        "--num_workers", type=int, default=8
     )
 
     parser.add_argument(
@@ -244,6 +144,10 @@ def main():
     inference_patch_size = tuple(args.inference_patch_size)
     inference_overlay = tuple(args.inference_overlay)
     inference_resize_factor = tuple(args.inference_resize_factor)
+    
+    # Choose dataset class based on depth
+    DatasetCls = MicroscopyDataset3D if inference_patch_size[0] > 1 else MicroscopyDataset2D
+    
     prev_z_slices = None
     
     z_plan = compute_z_plan(data_reader.volume_shape[0], inference_patch_size[0], inference_overlay[0])
@@ -257,8 +161,8 @@ def main():
             resize_factor=inference_resize_factor
         )
         
-        inference_dataset = DATASET(inference_patches, transform=inference_transform)
-        inference_loader = DataLoader(inference_dataset, batch_size=8, shuffle=False, num_workers=4)
+        inference_dataset = DatasetCls(inference_patches, transform=inference_transform)
+        inference_loader = DataLoader(inference_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
         
         logging.info(f"Inferencing ...")
         mask_patches = inferencer.eval(inference_loader)
