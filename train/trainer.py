@@ -108,7 +108,6 @@ class Trainer:
         import matplotlib
         matplotlib.use("Agg", force=True)
         import matplotlib.pyplot as plt
-        from datetime import datetime
 
         if metric_name not in self.metrics_history:
             logger.warning("Metric '%s' not found in metrics_history. Available keys: %s",

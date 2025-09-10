@@ -3,23 +3,36 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class DoubleConv2D(nn.Module):
-    """(Conv2D -> BatchNorm -> ReLU) * 2"""
+    """(Conv2D -> BatchNorm -> ReLU) * 2 -> Dropout"""
     def __init__(self, in_channels, out_channels):
         super(DoubleConv2D, self).__init__()
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
+            nn.LeakyReLU(inplace=True),
+            nn.Dropout2d(p=0.3)
         )
 
     def forward(self, x):
         return self.conv(x)
+    
+class UpConv2D(nn.Module):
+    """(Upsample -> Conv2D)"""
+    def __init__(self, in_channels, out_channels):
+        super(UpConv2D, self).__init__()
+        self.up = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+        )
+        
+    def forward(self, x):
+        return self.up(x)
 
 class UNet2D(nn.Module):
-    def __init__(self, in_channels=1, out_channels=1, features=[32, 64, 128, 256]):
+    def __init__(self, in_channels=1, out_channels=1, features=[64, 128, 256, 512]):
         super(UNet2D, self).__init__()
 
         # Encoder Path (Downsampling)
@@ -37,7 +50,7 @@ class UNet2D(nn.Module):
         self.ups = nn.ModuleList()
         self.decoders = nn.ModuleList()
         for feature in reversed(features):
-            self.ups.append(nn.ConvTranspose2d(feature * 2, feature, kernel_size=2, stride=2))
+            self.ups.append(UpConv2D(feature * 2, feature))
             self.decoders.append(DoubleConv2D(feature * 2, feature))
 
         # Final output layer

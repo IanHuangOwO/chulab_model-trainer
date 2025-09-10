@@ -11,12 +11,12 @@ python inference.py \
   
 Usage 2D:
 python inference.py ^
-  --img_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V45/left/raw ^
-  --mask_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V45/left ^
-  --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/function-3.pth ^
+  --img_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V45/down/raw ^
+  --mask_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V45/down ^
+  --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/NA.pth ^
   --output_type scroll-tiff ^
   --inference_patch_size 1 64 64 ^
-  --inference_overlay 0 4 4 ^
+  --inference_overlay 0 16 16 ^
   --inference_resize_factor 1 1 1
 """
 # Setup logging
@@ -38,10 +38,6 @@ from utils.reader import FileReader
 from utils.writer import FileWriter
 from utils.cropper import extract_patches
 from utils.stitcher import stitch_image
-
-# Model
-from models.UNet_2D_V2 import UNet2D
-from models.UNet_3D_V1 import UNet3D
 
 # Dataset Choose
 from inference.loader import MicroscopyDataset3D, MicroscopyDataset2D

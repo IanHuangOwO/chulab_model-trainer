@@ -16,11 +16,11 @@ python train.py ^
   --img_path ./datas/c-Fos/LI-WIN_PAPER/training-data/LI-AN-3D/images ^
   --mask_path ./datas/c-Fos/LI-WIN_PAPER/training-data/LI-AN-3D/masks ^
   --save_path ./datas/c-Fos/LI-WIN_PAPER/weights ^
-  --model_name function-3 ^
+  --model_name NA ^
   --training_epochs 100 ^
-  --training_batch_size 32 ^
+  --training_batch_size 48 ^
   --training_patch_size 1 64 64 ^
-  --training_overlay 0 4 4 ^
+  --training_overlay 0 8 8 ^
   --training_resize_factor 1 1 1 
 """
 
@@ -65,17 +65,17 @@ DATASET = MicroscopyDataset2D
 preproc_transform = Compose([
     # GaussianSmoothd(keys=["image"], sigma=1.0),
     # ScaleIntensityRanged(keys=["image"], a_min=0, a_max=2000, b_min=0.0, b_max=1.0, clip=True),
-    NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
+    # NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
     ToTensord(keys=["image", "mask"], dtype=torch.float32),
 ])
 
 aug_train_transform = Compose([
-    RandFlipd(keys=["image", "mask"], spatial_axis=1, prob=0.5),
-    RandAffined(keys=["image", "mask"], prob=0.5, rotate_range=(1.57, 1.57, 0.1)),
+    # RandFlipd(keys=["image", "mask"], spatial_axis=1, prob=0.5),
+    # RandAffined(keys=["image", "mask"], prob=0.5, rotate_range=(1.57, 1.57, 0.1)),
     # RandAdjustContrastd(keys=["image"], prob=0.3),
     # RandBiasFieldd(keys=["image"], prob=0.2),
-    RandShiftIntensityd(keys=["image"], offsets=0.2, prob=0.3),
-    RandScaleIntensityd(keys=["image"], factors=0.2, prob=0.3),
+    # RandShiftIntensityd(keys=["image"], offsets=0.2, prob=0.3),
+    # RandScaleIntensityd(keys=["image"], factors=0.2, prob=0.3),
     # RandZoomd(keys=["image", "mask"], min_zoom=0.9, max_zoom=1.1, prob=0.2),
 ])
 
@@ -84,7 +84,6 @@ aug_valid_transform = Compose([
     RandBiasFieldd(keys=["image"], prob=0.2),
     RandShiftIntensityd(keys=["image"], offsets=0.2, prob=0.3),
     RandScaleIntensityd(keys=["image"], factors=0.2, prob=0.3),
-    # RandZoomd(keys=["image", "mask"], min_zoom=0.9, max_zoom=1.1, prob=0.2),
 ])
 
 post_transform = Compose([

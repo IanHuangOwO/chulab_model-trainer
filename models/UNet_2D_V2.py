@@ -32,7 +32,7 @@ class UpConv2D(nn.Module):
         return self.up(x)
 
 class UNet2D(nn.Module):
-    def __init__(self, in_channels=1, out_channels=1, features=[64, 128, 256, 512]):
+    def __init__(self, in_channels=1, out_channels=1, features=[8, 16, 32, 64]):
         super(UNet2D, self).__init__()
 
         # Encoder Path (Downsampling)
