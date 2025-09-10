@@ -6,7 +6,7 @@ import os
 import torch
 from typing import List, Tuple
 
-from monai.transforms import Compose
+from monai.transforms.compose import Compose
 from monai.transforms.utility.dictionary import ToTensord
 from monai.transforms.intensity.dictionary import NormalizeIntensityd
 
@@ -16,7 +16,7 @@ from utils.cropper import extract_patches
 # Define transforms for inference (shared)
 inference_transform = Compose([
     ToTensord(keys=["image"], dtype=torch.float32),
-    NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
+    # NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
 ])
 
 

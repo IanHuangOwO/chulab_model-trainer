@@ -2,7 +2,15 @@
 Batch inference (2D or 3D) over an images directory tree using the same
 patching/stitching pipeline as inference.py.
 
-Example:
+Usage 3D:
+    python inference.py \
+    --img_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V60 \
+    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/NA.pth \
+    --inference_patch_size 16 64 64 \
+    --inference_overlay 2 4 4 \
+    --output_type scroll-tiff
+
+Usage 2D:
   python test.py ^
     --input_dir ./datas/c-Fos/LI-WIN_PAPER/testing-data/V60 ^
     --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/NA.pth ^
@@ -167,7 +175,7 @@ def main() -> int:
         if args.output_type in ["scroll-tiff", 'scroll-nii']:
             move_scroll_results_up(Path(mask_path), data_reader.volume_name)
 
-    logging.info(f"Done. Results under: {masks_root}")
+    logging.info(f"Finish results under: {masks_root}")
     return 0
 
 
