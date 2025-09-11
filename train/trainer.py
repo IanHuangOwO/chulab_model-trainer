@@ -1,5 +1,6 @@
 import torch
 import torch.optim as optim
+import numpy as np
 import os
 import logging
 from tqdm import tqdm
@@ -28,6 +29,10 @@ class Trainer:
                 "train": [],
                 "val": [],
             },
+            "dice": {
+                "train": [],
+                "val": [],
+            },
         }
 
         self.best_val_loss = float("inf")
@@ -35,6 +40,7 @@ class Trainer:
     def train_epoch(self, epoch):
         self.model.train()
         epoch_loss = 0.0
+        epoch_dice = 0.0
         progress_bar = tqdm(self.train_loader, desc=f"Training Epoch {epoch+1}", leave=False)
 
         for images, masks in progress_bar:
@@ -48,16 +54,24 @@ class Trainer:
             loss.backward()
             self.optimizer.step()
 
+            # accumulate metrics
             epoch_loss += loss.item()
-            progress_bar.set_postfix(loss=loss.item())
+            # soft dice score = 1 - dice_loss
+            batch_dice = 1.0 - dice_loss(outputs, masks).item()
+            epoch_dice += batch_dice
+            progress_bar.set_postfix(loss=f"{loss.item():.4f}", dice=f"{batch_dice:.4f}")
 
-        avg_loss = epoch_loss / len(self.train_loader)
+        n_batches = max(1, len(self.train_loader))
+        avg_loss = epoch_loss / n_batches
+        avg_dice = epoch_dice / n_batches
         self.metrics_history["loss"]["train"].append(avg_loss)
+        self.metrics_history["dice"]["train"].append(avg_dice)
         return avg_loss
 
     def validate_epoch(self, epoch):
         self.model.eval()
         val_loss = 0.0
+        val_dice = 0.0
         progress_bar = tqdm(self.val_loader, desc=f"Validating Epoch {epoch+1}", leave=False)
 
         with torch.no_grad():
@@ -67,10 +81,16 @@ class Trainer:
                 outputs = self.model(images)
                 loss = dice_bce_loss(outputs, masks)
                 val_loss += loss.item()
-                progress_bar.set_postfix(loss=loss.item())
+                # soft dice score
+                batch_dice = 1.0 - dice_loss(outputs, masks).item()
+                val_dice += batch_dice
+                progress_bar.set_postfix(loss=f"{loss.item():.4f}", dice=f"{batch_dice:.4f}")
 
-        avg_loss = val_loss / len(self.val_loader)
+        n_batches = max(1, len(self.val_loader))
+        avg_loss = val_loss / n_batches
+        avg_dice = val_dice / n_batches
         self.metrics_history["loss"]["val"].append(avg_loss)
+        self.metrics_history["dice"]["val"].append(avg_dice)
         return avg_loss
 
     def train(self, epochs=30):
@@ -94,13 +114,15 @@ class Trainer:
 
             # Save figure after each epoch with error handling
             try:
-                self.save_figure(metric_name="loss", epoch=epoch + 1)
+                self.save_figure(metric_name="all", epoch=epoch + 1)
             except Exception as e:
                 logger.warning("Could not save figure at epoch %d: %s", epoch + 1, str(e))
             
-    def save_figure(self, metric_name="loss", epoch=None):
-        """Save the training and validation curves for a given metric.
+    def save_figure(self, metric_name="all", epoch=None):
+        """Save training/validation curves.
 
+        - If metric_name == "all": save a single figure with subplots for all metrics in metrics_history.
+        - Else: save a single-plot figure for the specified metric.
         If `epoch` is provided, also save a uniquely named snapshot for that epoch
         to avoid issues when a viewer has the last image open on Windows.
         """
@@ -109,35 +131,62 @@ class Trainer:
         matplotlib.use("Agg", force=True)
         import matplotlib.pyplot as plt
 
-        if metric_name not in self.metrics_history:
-            logger.warning("Metric '%s' not found in metrics_history. Available keys: %s",
-                        metric_name, list(self.metrics_history.keys()))
-            return
+        metrics_to_plot = []
+        if metric_name == "all":
+            metrics_to_plot = [k for k, v in self.metrics_history.items() if v["train"] and v["val"]]
+            if not metrics_to_plot:
+                logger.warning("No metrics with data to plot.")
+                return
+        else:
+            if metric_name not in self.metrics_history:
+                logger.warning(
+                    "Metric '%s' not found in metrics_history. Available keys: %s",
+                    metric_name, list(self.metrics_history.keys())
+                )
+                return
+            if not self.metrics_history[metric_name]["train"] or not self.metrics_history[metric_name]["val"]:
+                logger.warning("No data available for metric '%s'. Skipping plot.", metric_name)
+                return
+            metrics_to_plot = [metric_name]
 
-        metric_data = self.metrics_history[metric_name]
-        if not metric_data["train"] or not metric_data["val"]:
-            logger.warning("No data available for metric '%s'. Skipping plot.", metric_name)
-            return
+        # Setup figure
+        n = len(metrics_to_plot)
+        cols = min(2, n)
+        rows = (n + cols - 1) // cols
+        fig, axes = plt.subplots(rows, cols, figsize=(8 * cols, 4.5 * rows))
+        if not isinstance(axes, (list, tuple, np.ndarray)):
+            axes = [axes]  # type: ignore
+        axes = np.array(axes).reshape(rows, cols)
 
-        plt.figure(figsize=(8, 6))
-        plt.plot(metric_data["train"], label=f"Train {metric_name.capitalize()}")
-        plt.plot(metric_data["val"], label=f"Validation {metric_name.capitalize()}")
-        plt.xlabel("Epoch")
-        plt.ylabel(metric_name.capitalize())
-        plt.title(f"Training and Validation {metric_name.capitalize()}")
-        plt.legend()
-        plt.grid(True)
+        # Plot each metric
+        for idx, m in enumerate(metrics_to_plot):
+            r, c = divmod(idx, cols)
+            ax = axes[r, c]
+            data = self.metrics_history[m]
+            ax.plot(data["train"], label=f"Train {m}")
+            ax.plot(data["val"], label=f"Val {m}")
+            ax.set_xlabel("Epoch")
+            ax.set_ylabel(m)
+            ax.set_title(f"{m.capitalize()} over Epochs")
+            ax.grid(True)
+            ax.legend()
 
-        base_name = f"{self.model_name}-{metric_name}_curve"
+        # Hide any unused subplots
+        for j in range(n, rows * cols):
+            r, c = divmod(j, cols)
+            fig.delaxes(axes[r, c])
+
+        base_name = f"{self.model_name}-metrics_curve" if metric_name == "all" else f"{self.model_name}-{metric_name}_curve"
         latest_path = os.path.join(self.save_path, f"{base_name}.png")
 
         # Always try to update the latest figure; if it's open, fall back silently
         try:
+            fig.tight_layout()
             plt.savefig(latest_path)
         except Exception as e:
             logger.warning(
                 "Could not update latest figure '%s': %s. Will try epoch-specific name.",
                 latest_path, str(e)
             )
-            
-        plt.close()
+        finally:
+            plt.close(fig)

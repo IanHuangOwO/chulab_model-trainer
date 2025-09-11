@@ -1,4 +1,27 @@
 """
+Train a 2D/3D U-Net-style segmentation model on microscopy data using patch-based
+sampling. Images and masks are loaded as volumes per subfolder, converted into
+patches with optional overlap and resize, then split into train/validation sets.
+During training, loss and Dice score are tracked and saved to figures; the best
+model checkpoint is written to disk.
+
+Expected data layout
+- --img_path: directory containing per-volume subfolders with image slices/files
+- --mask_path: directory containing matching subfolders with mask slices/files
+  Example:
+    <img_path>/01/  and  <mask_path>/01/
+    <img_path>/02/  and  <mask_path>/02/
+  Each subfolder can contain a stack of .tif/.tiff/.nii.gz, etc. The reader
+  assembles them into a single volume for patch extraction.
+
+Model and pipeline
+- Model: set by `MODEL` (defaults to UNet2D; use UNet3D for 3D)
+- Transforms: basic intensity normalization (+ optional commented augmentations)
+- Patching: `--training_patch_size z y x`, `--training_overlay z y x`,
+            `--training_resize_factor z y x`
+- Metrics: loss (Dice+BCE) and soft Dice score are logged; curves saved as PNG.
+- Checkpoint: best validation loss saved to `<save_path>/<model_name>.pth`.
+
 Usage 3D:
 python train.py \
   --img_path ./datas/c-Fos/YYC/training-data/LI-AN-3D/images \
@@ -9,22 +32,22 @@ python train.py \
   --training_batch_size 8 \
   --training_patch_size 16 64 64 \
   --training_overlay 0 0 0 \
-  --training_resize_factor 1 1 1 
+  --training_resize_factor 1 1 1 \
+  --visualize_preview
   
 Usage 2D:
 python train.py ^
-  --img_path ./datas/c-Fos/LI-WIN_PAPER/training-data/LI-AN-3D/images ^
-  --mask_path ./datas/c-Fos/LI-WIN_PAPER/training-data/LI-AN-3D/masks ^
+  --img_path ./datas/c-Fos/LI-WIN_PAPER/training-data/100-3D/images ^
+  --mask_path ./datas/c-Fos/LI-WIN_PAPER/training-data/100-3D/masks ^
   --save_path ./datas/c-Fos/LI-WIN_PAPER/weights ^
-  --model_name Normalized ^
+  --model_name fun-3 ^
   --training_epochs 100 ^
   --training_batch_size 48 ^
   --training_patch_size 1 64 64 ^
   --training_overlay 0 8 8 ^
-  --training_resize_factor 1 1 1 
+  --training_resize_factor 1 1 1 ^
+  --visualize_preview
 """
-
-# Setup logging
 import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -32,44 +55,28 @@ import argparse
 import os
 import sys
 import torch
-import numpy as np
-from sklearn.model_selection import train_test_split
 
 from monai.transforms.compose import Compose
 from monai.transforms.utility.dictionary import ToTensord
 from monai.transforms.spatial.dictionary import RandFlipd, RandZoomd, RandAffined
 from monai.transforms.intensity.dictionary import (
-    ScaleIntensityRanged, NormalizeIntensityd, 
-    RandAdjustContrastd, RandBiasFieldd, RandShiftIntensityd, RandScaleIntensityd, 
-    GaussianSmoothd
+    ScaleIntensityRanged, GaussianSmoothd, NormalizeIntensityd, 
+    RandAdjustContrastd, RandBiasFieldd, RandShiftIntensityd, RandScaleIntensityd
 )
 from monai.transforms.post.dictionary import AsDiscreted
 from monai.data.dataloader import DataLoader
 
 from train.trainer import Trainer
-from utils.reader import FileReader
-from utils.cropper import extract_training_batches
-
-# Model Choose
 from models.UNet_2D_V2 import UNet2D
 from models.UNet_3D_V1 import UNet3D
+from utils.datasets import MicroscopyDataset
+from utils.loader import load_train_data
+from utils.visualization import visualize_dataset
 
-MODEL = UNet2D
-
-# Dataset Choose
-from train.loader import MicroscopyDataset3D, MicroscopyDataset2D
-
-DATASET = MicroscopyDataset2D
-
-# Transform split: preproc (deterministic), aug (random), post (finalize)
-preproc_transform = Compose([
-    # GaussianSmoothd(keys=["image"], sigma=1.0),
+train_transform = Compose([
     # ScaleIntensityRanged(keys=["image"], a_min=0, a_max=2000, b_min=0.0, b_max=1.0, clip=True),
     NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
     ToTensord(keys=["image", "mask"], dtype=torch.float32),
-])
-
-aug_train_transform = Compose([
     # RandFlipd(keys=["image", "mask"], spatial_axis=1, prob=0.5),
     # RandAffined(keys=["image", "mask"], prob=0.5, rotate_range=(1.57, 1.57, 0.1)),
     # RandAdjustContrastd(keys=["image"], prob=0.3),
@@ -77,85 +84,28 @@ aug_train_transform = Compose([
     # RandShiftIntensityd(keys=["image"], offsets=0.2, prob=0.3),
     # RandScaleIntensityd(keys=["image"], factors=0.2, prob=0.3),
     # RandZoomd(keys=["image", "mask"], min_zoom=0.9, max_zoom=1.1, prob=0.2),
+    GaussianSmoothd(keys=["mask"], sigma=1.0),
+    AsDiscreted(keys=["mask"], threshold= 0.5)
 ])
 
-aug_valid_transform = Compose([
-    RandAdjustContrastd(keys=["image"], prob=0.3),
-    RandBiasFieldd(keys=["image"], prob=0.2),
-    RandShiftIntensityd(keys=["image"], offsets=0.2, prob=0.3),
-    RandScaleIntensityd(keys=["image"], factors=0.2, prob=0.3),
+val_transform = Compose([
+    # ScaleIntensityRanged(keys=["image"], a_min=0, a_max=2000, b_min=0.0, b_max=1.0, clip=True),
+    NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
+    ToTensord(keys=["image", "mask"], dtype=torch.float32),
+    # RandFlipd(keys=["image", "mask"], spatial_axis=1, prob=0.5),
+    # RandAffined(keys=["image", "mask"], prob=0.5, rotate_range=(1.57, 1.57, 0.1)),
+    # RandAdjustContrastd(keys=["image"], prob=0.3),
+    # RandBiasFieldd(keys=["image"], prob=0.2),
+    # RandShiftIntensityd(keys=["image"], offsets=0.2, prob=0.3),
+    # RandScaleIntensityd(keys=["image"], factors=0.2, prob=0.3),
+    # RandZoomd(keys=["image", "mask"], min_zoom=0.9, max_zoom=1.1, prob=0.2),
+    GaussianSmoothd(keys=["mask"], sigma=1.0),
+    AsDiscreted(keys=["mask"], threshold= 0.5)
 ])
 
-post_transform = Compose([
-    AsDiscreted(keys=["mask"], threshold=0.5),
-])
-
-# Compose final transforms
-train_transform = Compose([preproc_transform, aug_train_transform, post_transform])
-val_transform = Compose([preproc_transform, aug_valid_transform,  post_transform])
-
-# Load data test and mess with how to preprocess image and mask
-def load_data(img_path, mask_path, patch_size, overlay, resize_factor):
-    """
-    Loads and preprocesses 3D image and mask volumes from the specified directories, 
-    applies Gaussian smoothing and binarization to the masks, extracts 2D patches, 
-    and returns them for training.
-
-    Parameters:
-    ----------
-    img_path : str
-        Path to the folder containing subfolders of image volumes.
-        
-    mask_path : str
-        Path to the folder containing subfolders of corresponding mask volumes.
-
-    patch_size : tuple of int
-        The size of the extracted 2D patches, e.g., (256, 256).
-
-    overlay : int
-        The number of pixels by which patches should overlap during extraction.
-
-    resize_factor : float
-        Factor by which to downsample the image and mask before patch extraction.
-
-    Returns:
-    -------
-    image_patches : list of np.ndarray
-        A list of extracted image patches.
-
-    mask_patches : list of np.ndarray
-        A list of corresponding mask patches, preprocessed (binarized and smoothed).
-    """
-    volume_dirs = sorted([name for name in os.listdir(img_path)])
-    
-    image_patches = []
-    mask_patches = []
-
-    for folder_name in volume_dirs:
-        img_folder_path = os.path.join(img_path, folder_name)
-        mask_folder_path = os.path.join(mask_path, folder_name)
-        
-        img_reader = FileReader(img_folder_path)
-        img_volume = img_reader.read(z_start=0, z_end=img_reader.volume_shape[0]).astype(np.float32)
-
-        mask_reader = FileReader(mask_folder_path)
-        mask_volume = mask_reader.read(z_start=0, z_end=mask_reader.volume_shape[0]).astype(np.float32)
-        
-        img_p, mask_p = extract_training_batches(
-            image=img_volume, mask=mask_volume, 
-            patch_size=patch_size, overlay=overlay, 
-            resize_factor=resize_factor, balance=True
-        )
-        
-        image_patches.extend(img_p)
-        mask_patches.extend(mask_p)
-        
-    return image_patches, mask_patches
-
-
-def main():
+def parse_args():
     parser = argparse.ArgumentParser(
-        description="Train 3D U-Net for Microscopy Segmentation"
+        description="Train 3D or 2D U-Net for Microscopy Segmentation"
     )
     
     parser.add_argument(
@@ -203,8 +153,14 @@ def main():
         "--training_resize_factor", type=float, default=[1, 1, 1], nargs=3,
         help="Scaling factor (z, y, x) to resize the input image before training. Use [1,1,1] for no resizing."
     )
+    parser.add_argument(
+        "--visualize_preview", action="store_true",
+        help="If set, saves preview grids of train/val samples after transforms."
+    )
+    return parser.parse_args()
     
-    args = parser.parse_args()
+def main():
+    args = parse_args()
     
     img_root = args.img_path
     mask_root = args.mask_path
@@ -215,25 +171,42 @@ def main():
     training_patch_size = tuple(args.training_patch_size)
     training_overlay = tuple(args.training_overlay)
     training_resize_factor = tuple(args.training_resize_factor)
-    
-    image_patches, mask_patches = load_data(img_root, mask_root, training_patch_size, training_overlay, training_resize_factor)
-    
-    train_imgs, val_imgs, train_masks, val_masks = train_test_split(
-        image_patches, mask_patches, test_size=0.3, random_state=100
+
+    # Auto-select 2D vs 3D model and dataset based on Z depth
+    if training_patch_size[0] > 1:
+        SelectedModel = UNet3D
+        spatial_dims = 3
+        logging.info("Auto-selected 3D model/dataset (patch depth > 1)")
+    else:
+        SelectedModel = UNet2D
+        spatial_dims = 2
+        logging.info("Auto-selected 2D model/dataset (patch depth == 1)")
+        
+    # Load and split patches in one step
+    train_patches, val_patches = load_train_data(
+        img_path=img_root,
+        mask_path=mask_root,
+        patch_size=tuple(training_patch_size),
+        overlay=tuple(training_overlay),
+        resize_factor=tuple(training_resize_factor),
+        balance=True,
+        val_ratio=0.3,
+        seed=100,
     )
     
-    train_patches = []
-    for img, mask in zip(train_imgs, train_masks):
-        patch = {"image": img, "mask": mask}
-        train_patches.append(patch)
-        
-    val_patches = []
-    for img, mask in zip(val_imgs, val_masks):
-        patch = {"image": img, "mask": mask}
-        val_patches.append(patch)
-    
-    train_dataset = DATASET(train_patches, transform=train_transform)
-    val_dataset = DATASET(val_patches, transform=val_transform)
+    train_dataset = MicroscopyDataset(train_patches, transform=train_transform, spatial_dims=spatial_dims, with_mask=True)
+    val_dataset = MicroscopyDataset(val_patches, transform=val_transform, spatial_dims=spatial_dims, with_mask=True)
+
+    # Optional preview of transformed samples
+    if args.visualize_preview:
+        try:
+            visualize_dataset(train_dataset, title="Train samples")
+        except Exception as e:
+            logging.warning("Failed to visualize train preview: %s", str(e))
+        try:
+            visualize_dataset(val_dataset, title="Val samples")
+        except Exception as e:
+            logging.warning("Failed to visualize val preview: %s", str(e))
     
     train_loader = DataLoader(
         train_dataset,
@@ -254,7 +227,7 @@ def main():
         persistent_workers=True,
     )
     
-    model = MODEL(in_channels=args.training_input_channel, out_channels=args.training_output_channel)
+    model = SelectedModel(in_channels=args.training_input_channel, out_channels=args.training_output_channel)
     
     trainer = Trainer(
         model=model,
@@ -269,10 +242,6 @@ def main():
     trainer.train(epochs=args.training_epochs)
 
     logging.info("Training completed. Model saved to %s", args.save_path)
-
-    trainer.save_figure(metric_name="loss")
-
-    logging.info("All figure saved to %s", args.save_path)
 
 if __name__ == "__main__":
     sys.exit(main())

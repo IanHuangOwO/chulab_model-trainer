@@ -26,26 +26,27 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 import argparse
 import os
 import sys
-import torch
 
+import torch
+from monai.data.dataloader import DataLoader
 from monai.transforms.compose import Compose
 from monai.transforms.utility.dictionary import ToTensord
 from monai.transforms.intensity.dictionary import NormalizeIntensityd
-from monai.data.dataloader import DataLoader
 
+from IO.reader import FileReader
+from IO.writer import FileWriter
 from inference.inferencer import Inferencer
-from utils.reader import FileReader
-from utils.writer import FileWriter
-from utils.cropper import extract_patches
 from utils.stitcher import stitch_image
+from utils.datasets import MicroscopyDataset
+from utils.loader import load_model, load_inference_data, compute_z_plan
 
-# Dataset Choose
-from inference.loader import MicroscopyDataset3D, MicroscopyDataset2D
-from tools import inference_transform, load_model, load_data, compute_z_plan
+inference_transform = Compose([
+    ToTensord(keys=["image"], dtype=torch.float32),
+    NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
+])
 
-DATASET = MicroscopyDataset2D
-    
-def main():
+
+def parse_args():
     parser = argparse.ArgumentParser(
         description="3D Mask Inference: Applies a trained model to infer masks from 3D images and outputs multi-resolution results."
     )
@@ -113,12 +114,29 @@ def main():
         help="Number of levels in the output pyramid (e.g., 5 = base level + 4 downsampled levels)."
     )
 
-    args = parser.parse_args()
+    return parser.parse_args()
+
+def main():
+    args = parse_args()
     
     img_path = args.img_path
     mask_path = args.mask_path
     model_path = args.model_path
     os.makedirs(mask_path, exist_ok=True)
+    
+    logging.info("Loading model from: %s", model_path)
+    
+    model = load_model(model_path)
+    inferencer = Inferencer(model)
+    
+    inference_patch_size = tuple(args.inference_patch_size)
+    inference_overlay = tuple(args.inference_overlay)
+    inference_resize_factor = tuple(args.inference_resize_factor)
+    
+    # Choose spatial dims based on depth
+    spatial_dims = 3 if inference_patch_size[0] > 1 else 2
+    
+    prev_z_slices = None
     
     logging.info(f"Reading input image from: {img_path}")
     
@@ -136,24 +154,10 @@ def main():
         n_level=args.output_n_level,
     )
     
-    logging.info("Loading model from: %s", model_path)
-    
-    model = load_model(model_path)
-    inferencer = Inferencer(model)
-    
-    inference_patch_size = tuple(args.inference_patch_size)
-    inference_overlay = tuple(args.inference_overlay)
-    inference_resize_factor = tuple(args.inference_resize_factor)
-    
-    # Choose dataset class based on depth
-    DatasetCls = MicroscopyDataset3D if inference_patch_size[0] > 1 else MicroscopyDataset2D
-    
-    prev_z_slices = None
-    
     z_plan = compute_z_plan(data_reader.volume_shape[0], inference_patch_size[0], inference_overlay[0])
     
     for z_start, z_overlay in z_plan:
-        inference_patches, data_position = load_data(
+        inference_patches, data_position = load_inference_data(
             data_reader=data_reader, 
             z_start=z_start,
             patch_size=inference_patch_size,
@@ -161,7 +165,12 @@ def main():
             resize_factor=inference_resize_factor
         )
         
-        inference_dataset = DatasetCls(inference_patches, transform=inference_transform)
+        inference_dataset = MicroscopyDataset(
+            inference_patches,
+            transform=inference_transform,
+            spatial_dims=spatial_dims,
+            with_mask=False,
+        )
         inference_loader = DataLoader(inference_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
         
         logging.info(f"Inferencing ...")

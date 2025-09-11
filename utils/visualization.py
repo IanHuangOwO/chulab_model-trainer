@@ -8,16 +8,9 @@ Simple visualization utilities for image and mask pairs.
 
 from __future__ import annotations
 
-import os
-from typing import Optional
-
 import numpy as np
-
-try:
-    import torch  # type: ignore
-except Exception:  # pragma: no cover
-    torch = None  # type: ignore
-
+import torch
+from typing import Optional
 
 def _to_numpy(x) -> np.ndarray:
     if torch is not None and isinstance(x, torch.Tensor):
@@ -30,70 +23,87 @@ def _squeeze_channel(arr: np.ndarray) -> np.ndarray:
         return arr[0]
     return arr
 
-def visualize_dataset(dataset, n: int = 6, title: Optional[str] = None) -> None:
-    # Show interactively using the current matplotlib backend; do not save to disk
+def visualize_dataset(dataset, rows: int = 5, pairs_per_row: int = 4, title: Optional[str] = None) -> None:
+    """
+    Display a fixed grid of 9 rows x 16 columns (8 pairs per row):
+    - Each pair spans two columns: left=image, right=mask.
+    - Samples with empty masks are skipped for mask datasets.
+    - For image-only datasets, cells are filled with images sequentially.
+    """
     import matplotlib.pyplot as plt
 
-    n = max(1, min(n, len(dataset)))
+    total_pairs = pairs_per_row * rows
+    n_items = len(dataset)
+    if n_items == 0:
+        return
+
     sample = dataset[0]
     has_mask = isinstance(sample, (tuple, list)) and len(sample) >= 2
 
-    cols = 2 if has_mask else 1
-    rows = n
-    fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
-    if rows == 1 and cols == 1:
-        axes = np.array([[axes]])
-    elif rows == 1:
-        axes = np.array([axes])
-    elif cols == 1:
-        axes = axes.reshape(rows, 1)
+    # Select indices
+    if has_mask:
+        selected: list[int] = []
+        for idx in range(n_items):
+            try:
+                _, m = dataset[idx]
+            except Exception:
+                continue
+            m = _squeeze_channel(_to_numpy(m))
+            if np.any(m > 0):
+                selected.append(idx)
+                if len(selected) >= total_pairs:
+                    break
+        if not selected:
+            return
+    else:
+        selected = list(range(min(total_pairs, n_items)))
 
-    for i in range(n):
+    # Create figure: rows x (2*pairs_per_row) axes
+    cols = 2 * pairs_per_row
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 2.0, rows * 2.0))
+    if rows == 1:
+        axes = np.array([axes])
+
+    # Fill grid
+    for k, idx_ds in enumerate(selected):
+        r = k // pairs_per_row
+        c_pair = k % pairs_per_row
+        if r >= rows:
+            break
+
         if has_mask:
-            img_t, msk_t = dataset[i]
+            img_t, msk_t = dataset[idx_ds]
             img = _squeeze_channel(_to_numpy(img_t))
             msk = _squeeze_channel(_to_numpy(msk_t))
-            # pick slice where mask is most visible; only display mask if it has positives
-            mask_has_any = bool(np.any(msk > 0))
-            if img.ndim == 3:
-                if mask_has_any and msk.ndim == 3:
-                    sums = msk.sum(axis=(1, 2))
-                    idx = int(np.argmax(sums))
-                else:
-                    idx = img.shape[0] // 2
-                img2d = img[idx]
+            # Choose z slice with most mask
+            if img.ndim == 3 and msk.ndim == 3:
+                sums = msk.sum(axis=(1, 2))
+                z = int(np.argmax(sums))
+                img2d, msk2d = img[z], msk[z]
             else:
-                img2d = img
-            if mask_has_any:
-                if msk.ndim == 3:
-                    msk2d = msk[idx]
-                else:
-                    msk2d = msk
-            else:
-                msk2d = None
-                
-            axes[i, 0].imshow(img2d, cmap="gray")
-            axes[i, 0].set_title(f"image[{i}]")
-            axes[i, 0].axis("off")
+                img2d = img[img.shape[0] // 2] if img.ndim == 3 else img
+                msk2d = msk[msk.shape[0] // 2] if msk.ndim == 3 else msk
 
-            # Show mask only (no overlay) if present; else annotate
-            if msk2d is not None and np.any(msk2d > 0):
-                axes[i, 1].imshow(msk2d, cmap="gray", vmin=0, vmax=2)
-                axes[i, 1].set_title(f"mask[{i}]")
-                axes[i, 1].axis("off")
-            else:
-                axes[i, 1].axis("off")
-                axes[i, 1].text(0.5, 0.5, "no mask", ha='center', va='center', fontsize=10)
+            ax_img = axes[r, 2 * c_pair]
+            ax_msk = axes[r, 2 * c_pair + 1]
+            ax_img.imshow(img2d, cmap="gray")
+            ax_img.set_title(f"img[{idx_ds}]")
+            ax_img.axis("off")
+            ax_msk.imshow(msk2d, cmap="gray", vmin=0, vmax=1)
+            ax_msk.set_title(f"msk[{idx_ds}]")
+            ax_msk.axis("off")
         else:
-            img_t = dataset[i]
+            img_t = dataset[idx_ds]
             img = _squeeze_channel(_to_numpy(img_t))
-            if img.ndim == 3:
-                img2d = img[img.shape[0] // 2]
-            else:
-                img2d = img
-            axes[i, 0].imshow(img2d, cmap="gray")
-            axes[i, 0].set_title(f"image[{i}]")
-            axes[i, 0].axis("off")
+            img2d = img[img.shape[0] // 2] if img.ndim == 3 else img
+            ax = axes[r, c_pair]
+            ax.imshow(img2d, cmap="gray")
+            ax.set_title(f"img[{idx_ds}]")
+            ax.axis("off")
+
+    if title:
+        fig.suptitle(title)
+    fig.tight_layout(rect=(0, 0, 1, 0.97))
 
     if title:
         fig.suptitle(title)

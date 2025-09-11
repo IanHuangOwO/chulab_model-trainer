@@ -3,9 +3,9 @@ Batch inference (2D or 3D) over an images directory tree using the same
 patching/stitching pipeline as inference.py.
 
 Usage 3D:
-    python inference.py \
+    python test.py \
     --img_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V60 \
-    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/NA.pth \
+    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/fun-3.pth \
     --inference_patch_size 16 64 64 \
     --inference_overlay 2 4 4 \
     --output_type scroll-tiff
@@ -13,7 +13,7 @@ Usage 3D:
 Usage 2D:
   python test.py ^
     --input_dir ./datas/c-Fos/LI-WIN_PAPER/testing-data/V60 ^
-    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/NA.pth ^
+    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/func-3.pth ^
     --inference_patch_size 1 64 64 ^
     --inference_overlay 0 16 16 ^
     --output_type scroll-tiff
@@ -32,17 +32,26 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 import argparse
 import os
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 
 import torch
 from torch.utils.data import DataLoader
+from monai.transforms.compose import Compose
+from monai.transforms.utility.dictionary import ToTensord
+from monai.transforms.intensity.dictionary import NormalizeIntensityd
 
+from IO.reader import FileReader
+from IO.writer import FileWriter
 from inference.inferencer import Inferencer
-from inference.loader import MicroscopyDataset2D, MicroscopyDataset3D
-from utils.reader import FileReader
-from utils.writer import FileWriter
+from utils.datasets import MicroscopyDataset
 from utils.stitcher import stitch_image
-from tools import load_model, compute_z_plan, load_data, inference_transform
+from utils.loader import load_model, compute_z_plan, load_inference_data
+
+
+inference_transform = Compose([
+    ToTensord(keys=["image"], dtype=torch.float32),
+    NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
+])
 
 
 def list_subfolders(folder: Path) -> List[Path]:
@@ -102,15 +111,14 @@ def main() -> int:
 
     logging.info(f"Loading model: {args.model_path}")
     model = load_model(args.model_path)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    inferencer = Inferencer(model, device=device)
+    inferencer = Inferencer(model)
 
     inference_patch_size = tuple(args.inference_patch_size)
     inference_overlay = tuple(args.inference_overlay)
     inference_resize_factor = tuple(args.inference_resize_factor)
 
-    # Choose dataset class based on depth
-    DatasetCls = MicroscopyDataset3D if inference_patch_size[0] > 1 else MicroscopyDataset2D
+    # Choose spatial dims based on depth
+    spatial_dims = 3 if inference_patch_size[0] > 1 else 2
 
     # Auto-discover subfolders under images/
     if not images_root.exists():
@@ -147,7 +155,7 @@ def main() -> int:
         z_plan = compute_z_plan(data_reader.volume_shape[0], inference_patch_size[0], inference_overlay[0])
 
         for z_start, z_overlay in z_plan:
-            inference_patches, data_position = load_data(
+            inference_patches, data_position = load_inference_data(
                 data_reader=data_reader,
                 z_start=z_start,
                 patch_size=inference_patch_size, 
@@ -155,7 +163,12 @@ def main() -> int:
                 resize_factor=inference_resize_factor,
             )
 
-            inference_dataset = DatasetCls(inference_patches, transform=inference_transform)
+            inference_dataset = MicroscopyDataset(
+                inference_patches,
+                transform=inference_transform,
+                spatial_dims=spatial_dims,
+                with_mask=False,
+            )
             inference_loader = DataLoader(inference_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
             mask_patches = inferencer.eval(inference_loader)
