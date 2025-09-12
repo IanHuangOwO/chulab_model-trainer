@@ -1,23 +1,36 @@
 """
-Usage 3D:
-python inference.py \
-  --img_path ./datas/c-Fos/YYC/testing-data/YYC_20230414-1/images \
-  --mask_path ./datas/c-Fos/YYC/testing-data/YYC_20230414-1/results \
-  --model_path ./datas/c-Fos/YYC/weights/c-Fos_200_LI_AN.pth \
-  --output_type scroll-tiff \
-  --inference_patch_size 16 64 64 \
-  --inference_overlay 2 4 4 \
-  --inference_resize_factor 1 1 1 
-  
-Usage 2D:
-python inference.py ^
-  --img_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V45/down/raw ^
-  --mask_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V45/down ^
-  --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/NA.pth ^
-  --output_type scroll-tiff ^
-  --inference_patch_size 1 64 64 ^
-  --inference_overlay 0 16 16 ^
-  --inference_resize_factor 1 1 1
+Single-volume inference with patch-based tiling and stitching.
+
+This script loads a trained model and runs inference on a single 2D/3D volume.
+It splits the input into patches, runs the model, and stitches the results back
+to the original shape. The dimensionality (2D vs 3D) is inferred from the
+z-dimension of `--inference_patch_size` (z>1 → 3D, z==1 → 2D).
+
+Inputs/Outputs
+- --img_path: path to an image folder or volume file readable by FileReader.
+- --mask_path: output directory where predictions will be written.
+- --model_path: path to a saved torch model (.pth) loaded by utils.tools.
+- --output_type: output format (e.g., scroll-tiff, single-nii, zarr, ome-zarr).
+
+Examples (3D)
+  python inference.py \
+    --img_path ./datas/c-Fos/YYC/testing-data/YYC_20230414-1/images \
+    --mask_path ./datas/c-Fos/YYC/testing-data/YYC_20230414-1/results \
+    --model_path ./datas/c-Fos/YYC/weights/c-Fos_200_LI_AN.pth \
+    --output_type scroll-tiff \
+    --inference_patch_size 16 64 64 \
+    --inference_overlay 2 4 4 \
+    --inference_resize_factor 1 1 1
+
+Examples (2D, Windows caret)
+  python inference.py ^
+    --img_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V45/down/raw ^
+    --mask_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V45/down ^
+    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/NA.pth ^
+    --output_type scroll-tiff ^
+    --inference_patch_size 1 64 64 ^
+    --inference_overlay 0 16 16 ^
+    --inference_resize_factor 1 1 1
 """
 # Setup logging
 import logging
