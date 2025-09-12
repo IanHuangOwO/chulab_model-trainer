@@ -91,25 +91,6 @@ python test.py \
 If using `scroll-*` outputs, files are moved up from the temporary
 `<volume_name>_scroll` directory to the subfolder root.
 
-## Unified Dataset
-
-Use `MicroscopyDataset` for both training and inference:
-
-```
-from utils.datasets import MicroscopyDataset
-
-ds_train = MicroscopyDataset(train_patches, transform=train_transform, spatial_dims=3, with_mask=True)
-ds_infer = MicroscopyDataset(infer_patches, transform=inference_transform, spatial_dims=2, with_mask=False)
-```
-
-`spatial_dims` chooses 2D vs 3D; `with_mask` controls whether `(image, mask)` or `image` is returned.
-
-## Class Imbalance Tips
-
-For sparse targets, consider Tversky (alpha<beta) or Focal-based losses
-(`train/loss.py` provides Dice, BCE combos, and Tversky variants). You can also
-increase the fraction of foreground patches in the sampler.
-
 ## Troubleshooting
 
 - Windows: Use PowerShell carets `^` for line continuations as shown.
