@@ -13,7 +13,7 @@ Usage 3D:
 Usage 2D:
   python test.py ^
     --input_dir ./datas/c-Fos/LI-WIN_PAPER/testing-data/V60 ^
-    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/func-3.pth ^
+    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/fun-3.pth ^
     --inference_patch_size 1 64 64 ^
     --inference_overlay 0 16 16 ^
     --output_type scroll-tiff
