@@ -9,11 +9,11 @@ class DoubleConv2D(nn.Module):
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(inplace=True),
+            nn.ReLU(inplace=True),
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(inplace=True),
-            nn.Dropout2d(p=0.3)
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(p=0.2)
         )
 
     def forward(self, x):
@@ -32,7 +32,7 @@ class UpConv2D(nn.Module):
         return self.up(x)
 
 class UNet2D(nn.Module):
-    def __init__(self, in_channels=1, out_channels=1, features=[16, 32, 64, 128]):
+    def __init__(self, in_channels=1, out_channels=1, features=[4, 8, 16]):
         super(UNet2D, self).__init__()
 
         # Encoder Path (Downsampling)

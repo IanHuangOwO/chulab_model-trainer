@@ -24,12 +24,12 @@ Examples (3D)
 
 Examples (2D, Windows caret)
   python inference.py ^
-    --img_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V45/down/raw ^
-    --mask_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V45/down ^
-    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/NA.pth ^
+    --img_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V60/images/left ^
+    --mask_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V60 ^
+    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/func-3.pth ^
     --output_type scroll-tiff ^
-    --inference_patch_size 1 64 64 ^
-    --inference_overlay 0 16 16 ^
+    --inference_patch_size 1 32 32 ^
+    --inference_overlay 0 8 8 ^
     --inference_resize_factor 1 1 1
 """
 # Setup logging
@@ -44,18 +44,20 @@ import torch
 from monai.data.dataloader import DataLoader
 from monai.transforms.compose import Compose
 from monai.transforms.utility.dictionary import ToTensord
-from monai.transforms.intensity.dictionary import NormalizeIntensityd
+from monai.transforms.intensity.dictionary import ScaleIntensityRanged, NormalizeIntensityd
 
 from IO.reader import FileReader
 from IO.writer import FileWriter
 from inference.inferencer import Inferencer
+from utils.loader import load_model, load_inference_data, compute_z_plan
 from utils.stitcher import stitch_image
 from utils.datasets import MicroscopyDataset
-from utils.loader import load_model, load_inference_data, compute_z_plan
+
 
 inference_transform = Compose([
-    ToTensord(keys=["image"], dtype=torch.float32),
+    ScaleIntensityRanged(keys=["image"], a_min=0, a_max=1000, b_min=0.0, b_max=1.0, clip=True),
     NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
+    ToTensord(keys=["image"], dtype=torch.float32),
 ])
 
 

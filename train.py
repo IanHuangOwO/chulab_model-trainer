@@ -37,13 +37,13 @@ python train.py \
   
 Usage 2D:
 python train.py ^
-  --img_path ./datas/c-Fos/LI-WIN_PAPER/training-data/100-3D/images ^
-  --mask_path ./datas/c-Fos/LI-WIN_PAPER/training-data/100-3D/masks ^
+  --img_path ./datas/c-Fos/LI-WIN_PAPER/training-data/LI-AN-3D/images ^
+  --mask_path ./datas/c-Fos/LI-WIN_PAPER/training-data/LI-AN-3D/masks ^
   --save_path ./datas/c-Fos/LI-WIN_PAPER/weights ^
-  --model_name func-3 ^
-  --training_epochs 100 ^
-  --training_batch_size 64 ^
-  --training_patch_size 1 64 64 ^
+  --model_name func-3-small ^
+  --training_epochs 50 ^
+  --training_batch_size 128 ^
+  --training_patch_size 1 32 32 ^
   --training_overlay 0 16 16 ^
   --training_resize_factor 1 1 1 ^
   --visualize_preview
@@ -73,18 +73,19 @@ from utils.datasets import MicroscopyDataset
 from utils.loader import load_train_data
 from utils.visualization import visualize_dataset
 
+
 train_transform = Compose([
     ScaleIntensityRanged(keys=["image"], a_min=0, a_max=1000, b_min=0.0, b_max=1.0, clip=True),
     NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
     ToTensord(keys=["image", "mask"], dtype=torch.float32),
     RandFlipd(keys=["image", "mask"], spatial_axis=1, prob=0.5),
-    RandAffined(keys=["image", "mask"], prob=0.5, rotate_range=(1.57, 1.57, 0.1)),
+    # RandAffined(keys=["image", "mask"], prob=0.5, rotate_range=(1.57, 1.57, 0.1)),
     # RandAdjustContrastd(keys=["image"], prob=0.3),
     # RandBiasFieldd(keys=["image"], prob=0.2),
     RandShiftIntensityd(keys=["image"], offsets=0.2, prob=0.3),
     RandScaleIntensityd(keys=["image"], factors=0.2, prob=0.3),
     # RandZoomd(keys=["image", "mask"], min_zoom=0.9, max_zoom=1.1, prob=0.2),
-    GaussianSmoothd(keys=["mask"], sigma=1.0),
+    # GaussianSmoothd(keys=["mask"], sigma=1.0),
     AsDiscreted(keys=["mask"], threshold= 0.5)
 ])
 
@@ -97,7 +98,7 @@ val_transform = Compose([
     RandShiftIntensityd(keys=["image"], offsets=0.2, prob=0.3),
     RandScaleIntensityd(keys=["image"], factors=0.2, prob=0.3),
     # RandZoomd(keys=["image", "mask"], min_zoom=0.9, max_zoom=1.1, prob=0.2),
-    GaussianSmoothd(keys=["mask"], sigma=1.0),
+    # GaussianSmoothd(keys=["mask"], sigma=1.0),
     AsDiscreted(keys=["mask"], threshold= 0.5)
 ])
 

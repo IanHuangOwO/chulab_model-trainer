@@ -36,6 +36,26 @@ def _reduce(loss, reduction: str):
     raise ValueError(f"Invalid reduction: {reduction}")
 
 
+def dice_score(
+    pred,
+    target,
+    smooth: float = 1e-6,
+    *,
+    from_logits: bool = False,
+    reduction: str = "mean",
+):
+    """
+    Soft Dice score for segmentation (binary/multilabel).
+    - Computes per-sample global Dice (reduces all dims except batch) then applies reduction.
+    - If from_logits=True, applies sigmoid to pred.
+    """
+    pred, target, dims = _prepare_inputs(pred, target, from_logits=from_logits)
+    intersection = (pred * target).sum(dims)
+    union = pred.sum(dims) + target.sum(dims)
+    dice = (2.0 * intersection + smooth) / (union + smooth)
+    return _reduce(dice, reduction)
+
+
 def dice_loss(
     pred,
     target,
@@ -45,15 +65,11 @@ def dice_loss(
     reduction: str = "mean",
 ):
     """
-    Dice loss for segmentation (binary/multilabel).
-    - Computes per-sample global Dice (reduces all dims except batch) then applies reduction.
-    - If from_logits=True, applies sigmoid to pred.
+    Dice loss for segmentation (binary/multilabel) = 1 - dice_score.
+    Uses the same normalization and reduction as dice_score.
     """
-    pred, target, dims = _prepare_inputs(pred, target, from_logits=from_logits)
-    intersection = (pred * target).sum(dims)
-    union = pred.sum(dims) + target.sum(dims)
-    dice = (2.0 * intersection + smooth) / (union + smooth)
-    loss = 1.0 - dice
+    score = dice_score(pred, target, smooth=smooth, from_logits=from_logits, reduction="none")
+    loss = 1.0 - score
     return _reduce(loss, reduction)
 
 
@@ -81,6 +97,29 @@ def dice_bce_loss(
     return dice_weight * dl + bce_weight * bce
 
 
+def tversky_score(
+    pred,
+    target,
+    *,
+    alpha: float = 0.5,
+    beta: float = 0.5,
+    smooth: float = 1e-6,
+    from_logits: bool = False,
+    reduction: str = "mean",
+):
+    """
+    Tversky index (score) for segmentation (binary/multilabel).
+    alpha penalizes false positives; beta penalizes false negatives.
+    alpha=beta=0.5 approximates Dice.
+    """
+    pred, target, dims = _prepare_inputs(pred, target, from_logits=from_logits)
+    tp = (pred * target).sum(dims)
+    fp = (pred * (1.0 - target)).sum(dims)
+    fn = ((1.0 - pred) * target).sum(dims)
+    tversky = (tp + smooth) / (tp + alpha * fp + beta * fn + smooth)
+    return _reduce(tversky, reduction)
+
+
 def tversky_loss(
     pred,
     target,
@@ -92,16 +131,18 @@ def tversky_loss(
     reduction: str = "mean",
 ):
     """
-    Tversky loss for segmentation (binary/multilabel).
-    alpha penalizes false positives; beta penalizes false negatives.
-    alpha=beta=0.5 approximates Dice.
+    Tversky loss = 1 - tversky_score.
     """
-    pred, target, dims = _prepare_inputs(pred, target, from_logits=from_logits)
-    tp = (pred * target).sum(dims)
-    fp = (pred * (1.0 - target)).sum(dims)
-    fn = ((1.0 - pred) * target).sum(dims)
-    tversky = (tp + smooth) / (tp + alpha * fp + beta * fn + smooth)
-    loss = 1.0 - tversky
+    score = tversky_score(
+        pred,
+        target,
+        alpha=alpha,
+        beta=beta,
+        smooth=smooth,
+        from_logits=from_logits,
+        reduction="none",
+    )
+    loss = 1.0 - score
     return _reduce(loss, reduction)
 
 

@@ -27,8 +27,8 @@ Examples (3D)
 Examples (2D, Windows caret)
   python test.py ^
     --input_dir ./datas/c-Fos/LI-WIN_PAPER/testing-data/V60 ^
-    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/fun-3.pth ^
-    --inference_patch_size 1 64 64 ^
+    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/func-3-less-less-less.pth ^
+    --inference_patch_size 1 32 32 ^
     --inference_overlay 0 16 16 ^
     --output_type scroll-tiff
 """
@@ -44,7 +44,7 @@ import torch
 from torch.utils.data import DataLoader
 from monai.transforms.compose import Compose
 from monai.transforms.utility.dictionary import ToTensord
-from monai.transforms.intensity.dictionary import NormalizeIntensityd
+from monai.transforms.intensity.dictionary import ScaleIntensityRanged, NormalizeIntensityd
 
 from IO.reader import FileReader
 from IO.writer import FileWriter
@@ -55,8 +55,9 @@ from utils.loader import load_model, compute_z_plan, load_inference_data
 
 
 inference_transform = Compose([
-    ToTensord(keys=["image"], dtype=torch.float32),
+    ScaleIntensityRanged(keys=["image"], a_min=0, a_max=1000, b_min=0.0, b_max=1.0, clip=True),
     NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
+    ToTensord(keys=["image"], dtype=torch.float32),
 ])
 
 
