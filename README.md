@@ -41,8 +41,12 @@ What the runner does
 
 Notes
 - Code changes require a rebuild because code is copied into the image. The runners already use `--build` to rebuild as needed.
-- From Windows Command Prompt (cmd.exe), run PowerShell or Bash explicitly, e.g.: `powershell -ExecutionPolicy Bypass -File run.ps1` or `bash run.sh`.
+- From Windows Command Prompt (cmd.exe), invoke PowerShell or Bash explicitly, e.g.: `powershell -ExecutionPolicy Bypass -File run.ps1` or `bash run.sh`.
 - Ensure `datas/` exists (the scripts create it if missing).
+
+GPU prerequisites
+- Install recent NVIDIA GPU drivers.
+- Install the NVIDIA Container Toolkit so Docker can access the GPU.
 
 Inside the container
 
@@ -134,6 +138,27 @@ python test.py \
 
 If using `scroll-*` outputs, files are moved up from the temporary
 `<volume_name>_scroll` directory to the subfolder root.
+
+## Scripts
+
+- `run.ps1`: PowerShell runner (Windows). Builds the image, mounts only `datas/`, runs interactive bash, cleans up on exit.
+- `run.sh`: Bash runner (macOS/Linux). Same behavior.
+- `run.py`: Python runner (cross‑platform). Same behavior; auto-detects Compose v2/v1.
+
+Tips on Windows cmd
+- Run PowerShell scripts from cmd via: `powershell -ExecutionPolicy Bypass -File run.ps1`.
+- Run Bash scripts from cmd if Git Bash/WSL is installed via: `bash run.sh`.
+
+## Utilities
+
+- `architecture.py`: Prints a saved model's architecture and parameter counts.
+  - Pickled nn.Module: `python architecture.py /workspace/datas/weights/model.pth --project-root .`
+  - TorchScript: `python architecture.py /workspace/datas/weights/model.ts --jit`
+-
+- `metrics.py`: Evaluates predicted masks against ground truth and exports metrics to XLSX (falls back to CSV if openpyxl is missing).
+  - Layout: under `--base_dir`, expects `masks/` (GT) and one or more `masks_<model>/` prediction folders with matching subfolders/files.
+  - Example: `python metrics.py --base_dir ./datas/c-Fos/LI-WIN_PAPER/testing-data/V60`
+  - Output: `metrics.xlsx` with a summary sheet, subfolder breakdown, and per-model sheets with per-image rows.
 
 ## Troubleshooting
 
