@@ -6,8 +6,6 @@ Simple visualization utilities for image and mask pairs.
 - Inference datasets (image only): one column per sample
 """
 
-from __future__ import annotations
-
 import numpy as np
 import torch
 from typing import Optional

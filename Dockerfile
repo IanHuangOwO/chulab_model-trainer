@@ -16,6 +16,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Set working directory
 WORKDIR /workspace
 
-# Copy application code
-COPY train.py .
-COPY inference.py .
+# Copy application code and modules
+COPY train.py ./
+COPY inference.py ./
+COPY train ./train
+COPY inference ./inference
+COPY models ./models
+COPY IO ./IO
+COPY utils ./utils

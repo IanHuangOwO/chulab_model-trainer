@@ -1,3 +1,28 @@
+"""
+Model architecture inspector for saved PyTorch models.
+
+This utility loads a model artifact (either a pickled `torch.nn.Module`, a
+TorchScript file, or a checkpoint/state_dict) and prints a readable summary to
+stdout. It is useful for quickly checking the network structure and parameter
+counts without spinning up training or inference code.
+
+What it does
+- If given a TorchScript file (or `--jit`), loads via `torch.jit.load` and
+  prints the scripted module and, when available, the inlined graph.
+- If given a pickled `nn.Module` (common .pth/.pt), uses `torch.load` and
+  prints the module architecture plus total/trainable parameter counts.
+- If given a checkpoint/state_dict, lists the state_dict keys (and tensor
+  shapes) to help you reconstruct the original model for inspection.
+
+Common usage
+  python architecture.py ./datas/weights/model.pth --project-root .
+  python architecture.py ./datas/weights/model.ts --jit
+
+Exit codes
+- 0: Successful load and summary printed.
+- 1: Could not load or unsupported object type.
+"""
+
 import argparse
 import os
 import sys
@@ -7,6 +32,14 @@ import torch
 
 
 def print_module_info(module: torch.nn.Module):
+    """Print a concise architecture summary for a `torch.nn.Module`.
+
+    Shows the module's class, the textual architecture representation, and
+    parameter counts (total and trainable).
+
+    Parameters
+    - module: Instantiated PyTorch module to summarize.
+    """
     print("Model type:", type(module))
     print("\nArchitecture:\n")
     print(module)
@@ -16,6 +49,12 @@ def print_module_info(module: torch.nn.Module):
 
 
 def main():
+    """CLI entrypoint.
+
+    Parses arguments, attempts to load the provided model artifact, and prints
+    a summary appropriate to the loaded object type. Returns an exit code
+    compatible with shell usage (0 success, 1 failure).
+    """
     parser = argparse.ArgumentParser(description="Print architecture from a .pth/.pt model file.")
     parser.add_argument("path", help="Path to model file (.pth/.pt)")
     parser.add_argument("--jit", action="store_true", help="Force TorchScript loader (torch.jit.load)")

@@ -5,18 +5,6 @@ $ContainerWorkspacePath = "/workspace"
 $HostDataPath = "./datas"
 $ContainerDataPath = "/workspace/datas"
 
-$HostModelPath = "./models"
-$ContainerModelPath = "/workspace/models"
-
-$HostTrainPath = "./train"
-$ContainerTrainPath = "/workspace/train"
-
-$HostInferencerPath = "./inference"
-$ContainerInferencePath = "/workspace/inference"
-
-$HostUtilsPath = "./utils"
-$ContainerUtilsPath = "/workspace/utils"
-
 # ----- Docker Compose file path -----
 $ComposeFile = "./docker-compose.yml"
 
@@ -35,10 +23,6 @@ services:
     runtime: nvidia
     volumes:
       - "${HostDataPath}:${ContainerDataPath}"
-      - "${HostTrainPath}:${ContainerTrainPath}"
-      - "${HostInferencerPath}:${ContainerInferencePath}"
-      - "${HostModelPath}:${ContainerModelPath}"
-      - "${HostUtilsPath}:${ContainerUtilsPath}"
     working_dir: ${ContainerWorkspacePath}
     command: bash
     stdin_open: true
