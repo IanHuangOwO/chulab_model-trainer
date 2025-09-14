@@ -79,7 +79,7 @@ train_transform = Compose([
     NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
     ToTensord(keys=["image", "mask"], dtype=torch.float32),
     RandFlipd(keys=["image", "mask"], spatial_axis=1, prob=0.5),
-    # RandAffined(keys=["image", "mask"], prob=0.5, rotate_range=(1.57, 1.57, 0.1)),
+    RandAffined(keys=["image", "mask"], prob=0.5, rotate_range=(0.1, 0.1, 0.1)),
     # RandAdjustContrastd(keys=["image"], prob=0.3),
     # RandBiasFieldd(keys=["image"], prob=0.2),
     RandShiftIntensityd(keys=["image"], offsets=0.2, prob=0.3),
