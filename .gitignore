@@ -6,6 +6,8 @@ __pycache__/
 *.gz
 *.pth
 *.png
+*.csv
+*.xlsx
 .env
 .devcontainer/
 docker-compose.yml
