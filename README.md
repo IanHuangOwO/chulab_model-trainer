@@ -20,6 +20,50 @@ training, single-volume inference, and batch inference across a dataset tree.
 pip install -r requirements.txt
 ```
 
+## Docker
+
+The repo includes a GPU-enabled Docker workflow so you only need to mount your data; all code is baked into the image.
+
+- Image: built from `Dockerfile` (CUDA 12.9, Ubuntu 22.04). Copies `train.py`, `inference.py`, and the `IO/`, `models/`, `utils/`, `train/`, `inference/` packages into the container.
+- Volume: only `./datas` on the host is bind-mounted to `/workspace/datas` inside the container.
+- GPU: requires NVIDIA GPU drivers and the NVIDIA Container Toolkit.
+
+Quick start
+
+- Windows PowerShell: `./run.ps1`
+- macOS/Linux: `bash run.sh`
+- Cross‑platform Python: `python run.py`
+
+What the runner does
+- Generates a temporary `docker-compose.yml` with the single volume mount for `datas/`.
+- Builds the image and starts an interactive container (`bash`) in `/workspace`.
+- On exit (Ctrl+C), stops and removes the container, deletes the generated compose file, and prunes dangling images.
+
+Notes
+- Code changes require a rebuild because code is copied into the image. The runners already use `--build` to rebuild as needed.
+- From Windows Command Prompt (cmd.exe), run PowerShell or Bash explicitly, e.g.: `powershell -ExecutionPolicy Bypass -File run.ps1` or `bash run.sh`.
+- Ensure `datas/` exists (the scripts create it if missing).
+
+Inside the container
+
+Run training/inference exactly as you would locally, using paths under `/workspace/datas`:
+
+```
+python train.py \
+  --img_path /workspace/datas/<your>/images \
+  --mask_path /workspace/datas/<your>/masks \
+  --save_path /workspace/datas/<your>/weights \
+  --model_name my-model \
+  --training_patch_size 1 64 64
+
+python inference.py \
+  --img_path /workspace/datas/<your>/testing/images \
+  --mask_path /workspace/datas/<your>/testing/results \
+  --model_path /workspace/datas/<your>/weights/my-model.pth \
+  --output_type scroll-tiff \
+  --inference_patch_size 16 64 64
+```
+
 ## Data Layout
 
 Training expects separate image and mask trees with matching subfolders:
@@ -95,4 +139,3 @@ If using `scroll-*` outputs, files are moved up from the temporary
 
 - Windows: Use PowerShell carets `^` for line continuations as shown.
 - If figures fail to overwrite on Windows, the trainer also saves epoch-named snapshots.
-
