@@ -27,7 +27,7 @@ Examples (3D)
 Examples (2D, Windows caret)
   python test.py ^
     --input_dir ./datas/c-Fos/LI-WIN_PAPER/testing-data/V60 ^
-    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/func-3-small.pth ^
+    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/func-3_LI-AN-64.pth ^
     --inference_patch_size 1 32 32 ^
     --inference_overlay 0 16 16 ^
     --output_type scroll-tiff

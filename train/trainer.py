@@ -163,7 +163,7 @@ class Trainer:
                 pass
             
             self.scheduler.step(val_loss)
-
+            
             if val_loss < self.best_val_loss:
                 self.best_val_loss = val_loss
                 
