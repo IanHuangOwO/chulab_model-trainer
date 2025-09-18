@@ -322,7 +322,7 @@ class FileWriter:
 
     def _initialize_scroll_tiff(self) -> None:
         """Prepare paths for per-slice TIFF scroll outputs."""
-        self.output_path = self.output_path / f"{self.output_name}_scroll"
+        self.output_path = self.output_path / f"{self.output_name}.scroll-tif"
         self.output_path.mkdir(parents=True, exist_ok=True)
 
         self.output_file_path = [self.output_path / f"{name.stem}.tiff" for name in self.file_name]
@@ -333,7 +333,7 @@ class FileWriter:
 
     def _initialize_scroll_nii(self) -> None:
         """Prepare paths for scroll-style NIfTI outputs."""
-        self.output_path = self.output_path / f"{self.output_name}_scroll"
+        self.output_path = self.output_path / f"{self.output_name}.scroll-nii"
         self.output_path.mkdir(parents=True, exist_ok=True)
 
         self.output_file_path = [self.output_path / f"{name.stem}.nii.gz" for name in self.file_name]

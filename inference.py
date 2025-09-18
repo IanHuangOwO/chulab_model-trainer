@@ -1,21 +1,25 @@
 """
 Single-volume inference with patch-based tiling and stitching.
 
-This script loads a trained model and runs inference on a single 2D/3D volume.
-It splits the input into patches, runs the model, and stitches the results back
-to the original shape. The dimensionality (2D vs 3D) is inferred from the
-z-dimension of `--inference_patch_size` (z>1 → 3D, z==1 → 2D).
+Runs a trained model on a single 2D/3D volume by splitting the input into
+overlapping patches, predicting per patch, and stitching back to the original
+shape. Dimensionality is inferred from the z-size of `--inference_patch_size`
+(z > 1 → 3D, z == 1 → 2D).
 
-Inputs/Outputs
-- --img_path: path to an image folder or volume file readable by FileReader.
-- --mask_path: output directory where predictions will be written.
-- --model_path: path to a saved torch model (.pth) loaded by utils.tools.
-- --output_type: output format (e.g., scroll-tiff, single-nii, zarr, ome-zarr).
+Parameters (CLI)
+- --input_path: Path to an image folder or a single volume readable by FileReader.
+- --output_path: Directory where predicted masks are written.
+- --model_path: Path to a saved torch model file (.pth/.pt).
+- --inference_patch_size: Patch size as three integers `z y x`.
+- --inference_overlay: Overlap between adjacent patches `z y x`.
+- --inference_resize_factor: Optional resize factors `z y x` applied before inference.
+- --output_type: Output format, one of OUTPUT_CHOICES (e.g., 'scroll-tiff', 'zarr', 'ome-zarr').
+- --output_dtype / --output_chunk_size / --output_n_level / --output_resize_*: Writer options for multi-resolution outputs.
 
 Examples (3D)
   python inference.py \
-    --img_path ./datas/c-Fos/YYC/testing-data/YYC_20230414-1/images \
-    --mask_path ./datas/c-Fos/YYC/testing-data/YYC_20230414-1/results \
+    --input_path ./datas/c-Fos/YYC/testing-data/YYC_20230414-1/images \
+    --output_path ./datas/c-Fos/YYC/testing-data/YYC_20230414-1/results \
     --model_path ./datas/c-Fos/YYC/weights/c-Fos_200_LI_AN.pth \
     --output_type scroll-tiff \
     --inference_patch_size 16 64 64 \
@@ -24,12 +28,12 @@ Examples (3D)
 
 Examples (2D, Windows caret)
   python inference.py ^
-    --img_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V60/images/left ^
-    --mask_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V60 ^
-    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/func-3.pth ^
-    --output_type scroll-tiff ^
+    --input_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V60/images/left ^
+    --output_path ./datas/c-Fos/LI-WIN_PAPER/testing-data/V60 ^
+    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/func-3_LI-AN-32.pth ^
+    --output_type ome-zarr ^
     --inference_patch_size 1 32 32 ^
-    --inference_overlay 0 8 8 ^
+    --inference_overlay 0 16 16 ^
     --inference_resize_factor 1 1 1
 """
 # Setup logging
@@ -66,11 +70,11 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--img_path", type=str, required=True,
+        "--input_path", type=str, required=True,
         help="Path to the input 3D image file."
     )
     parser.add_argument(
-        "--mask_path", type=str, required=True,
+        "--output_path", type=str, required=True,
         help="Path to the output mask file (where the inferred mask will be saved)."
     )
     parser.add_argument(
@@ -132,10 +136,10 @@ def parse_args():
 def main():
     args = parse_args()
     
-    img_path = args.img_path
-    mask_path = args.mask_path
+    input_path = args.input_path
+    output_path = args.output_path
     model_path = args.model_path
-    os.makedirs(mask_path, exist_ok=True)
+    os.makedirs(output_path, exist_ok=True)
     
     logging.info("Loading model from: %s", model_path)
     
@@ -151,12 +155,12 @@ def main():
     
     prev_z_slices = None
     
-    logging.info(f"Reading input image from: {img_path}")
+    logging.info(f"Reading input image from: {input_path}")
     
-    data_reader = FileReader(img_path)
+    data_reader = FileReader(input_path)
     output_type = TYPE_MAP.get(args.output_type)
     data_writer = FileWriter(
-        output_path=mask_path,
+        output_path=output_path,
         output_name=data_reader.volume_name, 
         output_type=output_type,
         output_dtype=args.output_dtype,
@@ -203,10 +207,10 @@ def main():
         
         data_writer.write(stitched_volume, z_start=z_start, z_end=z_start+stitched_volume.shape[0])
 
-    if output_type == "OME-Zarr":
+    if output_type == "ome-zarr":
         data_writer.complete_ome()
         
-    logging.info(f"Inference complete. Output saved to {mask_path}")
+    logging.info(f"Inference complete. Output saved to {output_path}")
         
 if __name__ == "__main__":
     sys.exit(main())

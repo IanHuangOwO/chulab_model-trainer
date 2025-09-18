@@ -2,8 +2,8 @@
 Train a 2D/3D U-Net-style segmentation model on microscopy data using patch-based
 sampling. Images and masks are loaded as volumes per subfolder, converted into
 patches with optional overlap and resize, then split into train/validation sets.
-During training, loss and Dice score are tracked and saved to figures; the best
-model checkpoint is written to disk.
+During training, Dice+BCE loss and Dice score are tracked and figures are saved;
+the best model checkpoint (by validation loss) is written to disk.
 
 Expected data layout
 - --img_path: directory containing per-volume subfolders with image slices/files
@@ -11,15 +11,18 @@ Expected data layout
   Example:
     <img_path>/01/  and  <mask_path>/01/
     <img_path>/02/  and  <mask_path>/02/
-  Each subfolder can contain a stack of .tif/.tiff/.nii.gz, etc. The reader
-  assembles them into a single volume for patch extraction.
+  Each subfolder can contain a stack of .tif/.tiff/.nii.gz, .nii.gz, etc.; the
+  reader assembles them into a single volume for patch extraction.
 
 Model and pipeline
-- Model: set by `MODEL` (defaults to UNet2D; use UNet3D for 3D)
-- Transforms: basic intensity normalization (+ optional commented augmentations)
+- Model: auto-selected by z-depth of `--training_patch_size` (UNet3D if z > 1,
+  else UNet2D).
+- Channels: `--training_input_channel`, `--training_output_channel` control
+  input/output channels.
+- Transforms: intensity normalization (+ optional/random augmentations).
 - Patching: `--training_patch_size z y x`, `--training_overlay z y x`,
-            `--training_resize_factor z y x`
-- Metrics: loss (Dice+BCE) and soft Dice score are logged; curves saved as PNG.
+            `--training_resize_factor z y x`.
+- Metrics: Dice+BCE training loss and Dice score logged; curves saved as PNG.
 - Checkpoint: best validation loss saved to `<save_path>/<model_name>.pth`.
 
 Usage 3D:
@@ -35,7 +38,7 @@ python train.py \
   --training_resize_factor 1 1 1 \
   --visualize_preview
   
-Usage 2D:
+Usage 2D (Windows caret):
 python train.py ^
   --img_path ./datas/c-Fos/LI-WIN_PAPER/training-data/LI-AN-3D/images ^
   --mask_path ./datas/c-Fos/LI-WIN_PAPER/training-data/LI-AN-3D/masks ^

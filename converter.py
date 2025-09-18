@@ -5,7 +5,7 @@ per-slice "scroll" exports).
 
 Example
   python converter.py ^
-    --input D:\iansaididontcare\Chulab\others\CHL\M38\M38_raw ^
+    --input_path D:\iansaididontcare\Chulab\others\CHL\M38\M38_anno_ome.zarr\2 ^
     --output_path D:\iansaididontcare\Chulab\others\CHL ^
     --output_type OME-Zarr ^
     --chunk-size 128 ^

@@ -1,19 +1,19 @@
 """
 Batch inference (2D/3D) over a dataset directory using patch-based tiling.
 
-This script discovers subfolders under `<input_dir>/images`, runs inference on
-each volume using the same patching/stitching pipeline as inference.py, and
-writes predictions under `<input_dir>/masks_{model_stem}/<subfolder>`.
+Discovers subfolders under `<input_dir>/images`, runs inference on each volume
+using the same patching/stitching pipeline as inference.py, and writes
+predictions under `<input_dir>/masks_{model_stem}/<subfolder>`.
 
-Dimensionality (2D vs 3D) is inferred from the z-size of
-`--inference_patch_size` (z>1 → 3D, z==1 → 2D).
+Dimensionality
+- Inferred from `--inference_patch_size` z: z > 1 → 3D, z == 1 → 2D.
 
 Input layout
   <input_dir>/images/<subfolder>/*.{tif,tiff,nii.gz,...}
 
 Outputs
   <input_dir>/masks_{model_stem}/<subfolder>/...
-  If `--output_type=scroll-tiff` (or scroll-nii), files are moved up from the
+  If `--output_type=scroll-tiff` (or 'scroll-nii'), files are moved up from the
   intermediate `<volume_name>_scroll` folder to the subfolder root.
 
 Examples (3D)
@@ -22,7 +22,7 @@ Examples (3D)
     --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/fun-3.pth \
     --inference_patch_size 16 64 64 \
     --inference_overlay 2 4 4 \
-    --output_type Scroll-Tif
+    --output_type scroll-tiff
 
 Examples (2D, Windows caret)
   python test.py ^
@@ -30,7 +30,7 @@ Examples (2D, Windows caret)
     --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/func-3_LI-AN-32.pth ^
     --inference_patch_size 1 32 32 ^
     --inference_overlay 0 16 16 ^
-    --output_type Scroll-Tif
+    --output_type scroll-tiff
 """
 import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
