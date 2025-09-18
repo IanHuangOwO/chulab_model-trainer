@@ -40,7 +40,7 @@ python train.py ^
   --img_path ./datas/c-Fos/LI-WIN_PAPER/training-data/LI-AN-3D/images ^
   --mask_path ./datas/c-Fos/LI-WIN_PAPER/training-data/LI-AN-3D/masks ^
   --save_path ./datas/c-Fos/LI-WIN_PAPER/weights ^
-  --model_name func-3_LI-AN-64 ^
+  --model_name func-3_LI-AN-32 ^
   --training_epochs 50 ^
   --training_batch_size 128 ^
   --training_patch_size 1 32 32 ^

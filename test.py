@@ -22,15 +22,15 @@ Examples (3D)
     --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/fun-3.pth \
     --inference_patch_size 16 64 64 \
     --inference_overlay 2 4 4 \
-    --output_type scroll-tiff
+    --output_type Scroll-Tif
 
 Examples (2D, Windows caret)
   python test.py ^
     --input_dir ./datas/c-Fos/LI-WIN_PAPER/testing-data/V60 ^
-    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/func-3_LI-AN-64.pth ^
+    --model_path ./datas/c-Fos/LI-WIN_PAPER/weights/func-3_LI-AN-32.pth ^
     --inference_patch_size 1 32 32 ^
     --inference_overlay 0 16 16 ^
-    --output_type scroll-tiff
+    --output_type Scroll-Tif
 """
 import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -46,8 +46,7 @@ from monai.transforms.compose import Compose
 from monai.transforms.utility.dictionary import ToTensord
 from monai.transforms.intensity.dictionary import ScaleIntensityRanged, NormalizeIntensityd
 
-from IO.reader import FileReader
-from IO.writer import FileWriter
+from IO import FileReader, FileWriter, OUTPUT_CHOICES, TYPE_MAP
 from inference.inferencer import Inferencer
 from utils.datasets import MicroscopyDataset
 from utils.stitcher import stitch_image
@@ -99,7 +98,7 @@ def parse_args():
     p.add_argument("--inference_resize_factor", type=float, nargs=3, default=[1, 1, 1])
     p.add_argument("--inference_resize_order", type=int, default=0)
     # Output params mirroring inference.py
-    p.add_argument("--output_type", type=str, default='scroll-tiff', choices=['single-tiff', 'scroll-tiff', 'single-nii', 'scroll-nii'])
+    p.add_argument("--output_type", type=str, default='scroll-tiff', choices=OUTPUT_CHOICES)
     p.add_argument("--output_dtype", type=str, default='uint16')
     p.add_argument("--output_chunk_size", type=int, nargs=3, default=[128, 128, 128])
     p.add_argument("--output_resize_factor", type=int, default=2)
@@ -144,10 +143,11 @@ def main() -> int:
 
         logging.info(f"Reading input image from: {img_path}")
         data_reader = FileReader(img_path)
+        output_type = TYPE_MAP.get(args.output_type)
         data_writer = FileWriter(
             output_path=mask_path,
             output_name=data_reader.volume_name,
-            output_type=args.output_type,
+            output_type=output_type,
             output_dtype=args.output_dtype,
             full_res_shape=data_reader.volume_shape,
             file_name=data_reader.volume_files,
@@ -192,7 +192,7 @@ def main() -> int:
 
             data_writer.write(stitched_volume, z_start=z_start, z_end=z_start + stitched_volume.shape[0])
 
-        if args.output_type in ["scroll-tiff", 'scroll-nii']:
+        if output_type in ["scroll-tiff", 'scroll-nii']:
             move_scroll_results_up(Path(mask_path), data_reader.volume_name)
 
     logging.info(f"Finish results under: {masks_root}")

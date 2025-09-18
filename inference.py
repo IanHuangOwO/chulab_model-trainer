@@ -46,8 +46,7 @@ from monai.transforms.compose import Compose
 from monai.transforms.utility.dictionary import ToTensord
 from monai.transforms.intensity.dictionary import ScaleIntensityRanged, NormalizeIntensityd
 
-from IO.reader import FileReader
-from IO.writer import FileWriter
+from IO import FileReader, FileWriter, OUTPUT_CHOICES, TYPE_MAP
 from inference.inferencer import Inferencer
 from utils.loader import load_model, load_inference_data, compute_z_plan
 from utils.stitcher import stitch_image
@@ -103,8 +102,7 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--output_type", type=str, default='scroll-tiff',
-        choices=['zarr', 'ome-zarr', 'single-tiff', 'scroll-tiff', 'single-nii', 'scroll-nii'],
+        "--output_type", type=str, default='scroll-tiff', choices=OUTPUT_CHOICES,
         help="Output format type. ex: 'scroll-tiff', 'zarr', 'ome-zarr' or other supported formats."
     )
     parser.add_argument(
@@ -156,10 +154,11 @@ def main():
     logging.info(f"Reading input image from: {img_path}")
     
     data_reader = FileReader(img_path)
+    output_type = TYPE_MAP.get(args.output_type)
     data_writer = FileWriter(
         output_path=mask_path,
         output_name=data_reader.volume_name, 
-        output_type=args.output_type,
+        output_type=output_type,
         output_dtype=args.output_dtype,
         full_res_shape=data_reader.volume_shape,
         file_name=data_reader.volume_files,
@@ -204,8 +203,8 @@ def main():
         
         data_writer.write(stitched_volume, z_start=z_start, z_end=z_start+stitched_volume.shape[0])
 
-    if args.output_type == "ome-zarr":
-        data_writer.write_ome_levels()
+    if output_type == "OME-Zarr":
+        data_writer.complete_ome()
         
     logging.info(f"Inference complete. Output saved to {mask_path}")
         
