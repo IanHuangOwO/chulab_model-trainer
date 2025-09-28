@@ -33,7 +33,7 @@ python train.py \
   --model_name c-Fos \
   --training_epochs 100 \
   --training_batch_size 8 \
-  --training_patch_size 16 64 64 \
+  --training_patch_size 32 32 32 \
   --training_overlay 0 0 0 \
   --training_resize_factor 1 1 1 \
   --visualize_preview
@@ -47,7 +47,7 @@ python train.py ^
   --training_epochs 50 ^
   --training_batch_size 128 ^
   --training_patch_size 1 32 32 ^
-  --training_overlay 0 16 16 ^
+  --training_overlay 0 0 0 ^
   --training_resize_factor 1 1 1 ^
   --visualize_preview
 """
