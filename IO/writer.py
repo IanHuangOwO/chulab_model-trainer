@@ -270,7 +270,7 @@ class FileWriter:
 
     def _initialize_ome(self) -> None:
         """Create the multiscale OME-Zarr hierarchy and allocate datasets."""
-        self.output_path = self.output_path / f"{self.output_name}_ome.zarr"
+        self.output_path = self.output_path / f"{self.output_name}.ome.zarr"
 
         store = zarr.DirectoryStore(self.output_path)
         self.store_group = zarr.group(store=store)
