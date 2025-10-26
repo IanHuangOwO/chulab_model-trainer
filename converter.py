@@ -5,8 +5,8 @@ per-slice "scroll" exports).
 
 Example
   python converter.py ^
-    --input_path E:\\Kuo_TH_cFOS_15\\Kuo_TH_v39_auto-488_cfos-561_4X_z4_tiffs_destriped\\Flatten_561_mask ^
-    --output_path C:\\Users\\iansaididontcare\\Documents\\Chulab\\chulab_project-gate\\datas\\cFOS\\Kuo\\Kuo_TH_v39_auto-488_cfos-561_4X_z4_tiffs_destriped ^
+    --input_path E:\\Kuo_TH_cFOS_15\\Kuo_TH_v43_auto-488_cfos-561_4X_z4_tiffs_destriped\\Flatten_561_mask ^
+    --output_path E:\\Kuo_TH_cFOS_15\\Kuo_TH_v43_auto-488_cfos-561_4X_z4_tiffs_destriped\\ ^
     --output_type OME-Zarr ^
     --chunk-size 128 ^
     --resize-order 0 ^
