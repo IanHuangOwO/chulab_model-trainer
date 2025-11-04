@@ -11,6 +11,7 @@ from train.loss import (
     dice_score, dice_loss, dice_bce_loss, 
     tversky_score, tversky_loss, tversky_bce_loss
 )
+from utils.visualization import visualize_dataset
 
 # Initialize logging
 logger = logging.getLogger(__name__)
