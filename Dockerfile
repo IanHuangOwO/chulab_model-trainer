@@ -1,5 +1,5 @@
 # Dockerfile for zarr file based analyzer
-FROM nvidia/cuda:12.9.0-devel-ubuntu22.04
+FROM nvidia/cuda:12.6.0-devel-ubuntu22.04
 
 # Install dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \

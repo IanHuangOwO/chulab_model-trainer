@@ -42,7 +42,18 @@ class Trainer:
     - History is recorded per metric for train/val and used for plotting.
     """
 
-    def __init__(self, model, train_loader, val_loader, device=None, lr=0.001, model_name="best_model", save_path="./"):
+    def __init__(
+        self,
+        model,
+        train_loader,
+        val_loader,
+        test_loader=None,
+        device=None,
+        lr=0.001,
+        model_name="best_model",
+        save_path="./",
+        cache_size=40,
+    ):
         self.model = model
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -61,7 +72,13 @@ class Trainer:
 
         self.best_val_loss = float("inf")
 
-    def _run_epoch(self, epoch: int, *, train: bool) -> float:
+        # Cache for best model's results
+        self.cache_size = cache_size
+        self.best_results_cache: Dict[str, List[np.ndarray]] = {
+            "images": [], "masks": [], "outputs": []
+        }
+
+    def _run_epoch(self, epoch: int, *, train: bool, desc: str) -> float:
         """Run a single epoch and return the average primary loss.
 
         When train=True, performs backprop; otherwise uses no_grad().
@@ -109,6 +126,18 @@ class Trainer:
 
                 for k, v in batch_metrics.items():
                     sums[k] = sums.get(k, 0.0) + v
+                
+                # If validating and this is a new best model, cache results
+                if not train and loss_val < self.best_val_loss and len(self.best_results_cache["images"]) < self.cache_size:
+                    # Clear cache on first batch of a new best epoch
+                    if len(self.best_results_cache["images"]) == 0:
+                        self.best_results_cache = {"images": [], "masks": [], "outputs": []}
+
+                    # Apply sigmoid to convert logits to probabilities for visualization
+                    n_to_add = min(self.cache_size - len(self.best_results_cache["images"]), images.size(0))
+                    self.best_results_cache["images"].extend(images[:n_to_add].cpu().numpy())
+                    self.best_results_cache["masks"].extend(masks[:n_to_add].cpu().numpy())
+                    self.best_results_cache["outputs"].extend(outputs[:n_to_add].cpu().numpy())
 
                 progress.set_postfix({k: f"{batch_metrics[k]:.4f}" for k in batch_metrics})
 
@@ -121,11 +150,11 @@ class Trainer:
         return sums.get(PRIMARY_LOSS_KEY, 0.0) / n_batches
 
     def train_epoch(self, epoch: int) -> float:
-        return self._run_epoch(epoch, train=True)
+        return self._run_epoch(epoch, train=True, desc=f'Training Epoch {epoch+1}')
 
     def validate_epoch(self, epoch):
-        return self._run_epoch(epoch, train=False)
-
+        return self._run_epoch(epoch, train=False, desc=f'Validating Epoch {epoch+1}')
+    
     def train(self, epochs=30):
         for epoch in range(epochs):
             print("\n")
@@ -177,6 +206,23 @@ class Trainer:
             except Exception as e:
                 logger.warning("Could not save figure at epoch %d: %s", epoch + 1, str(e))
             
+        # After all epochs, visualize the cached best results
+        self._visualize_best_results()
+
+    def _visualize_best_results(self):
+        """Saves a visualization of the cached results from the best model."""
+        if not self.best_results_cache["images"]:
+            logger.info("No cached results to visualize.")
+            return
+
+        logger.info("Saving visualization of best model results...")
+        # Create a temporary dataset-like list of tuples for the visualizer
+        cached_dataset = list(zip(self.best_results_cache["images"], self.best_results_cache["masks"]))
+        
+        visualize_dataset(
+            cached_dataset, predictions=self.best_results_cache["outputs"], save_path=self.save_path, title=f"Best Model Results (val_loss {self.best_val_loss:.4f})"
+        )
+
     def save_figure(self, metric_name="all", epoch=None):
         """Save training/validation curves.
 
