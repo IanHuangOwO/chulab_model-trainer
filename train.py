@@ -40,11 +40,11 @@ python train.py \
   
 Usage 2D (Windows caret):
 python train.py ^
-  --img_path ./datas/Lectin/green_computing/training-data/ZHE-WEI-2D/images ^
-  --mask_path ./datas/Lectin/green_computing/training-data/ZHE-WEI-2D/masks ^
-  --save_path ./datas/Lectin/green_computing/weights/ZHE-WEI_Test ^
-  --model_name ZHE-WEI_Test ^
-  --training_epochs 10 ^
+  --img_path ./datas/Lectin/green_computing/training-data/YIN-HSU-3D/images ^
+  --mask_path ./datas/Lectin/green_computing/training-data/YIN-HSU-3D/masks ^
+  --save_path ./datas/Lectin/green_computing/weights/YIN-HSU_RAW ^
+  --model_name YIN-HSU_RAW ^
+  --training_epochs 50 ^
   --training_batch_size 64 ^
   --training_patch_size 1 32 32 ^
   --training_overlay 0 0 0 ^
