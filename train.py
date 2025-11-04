@@ -40,11 +40,11 @@ python train.py \
   
 Usage 2D (Windows caret):
 python train.py ^
-  --img_path ./datas/Lectin/Wu/training-data/YIN-HSU-3D/images ^
-  --mask_path ./datas/Lectin/Wu/training-data/YIN-HSU-3D/masks ^
-  --save_path ./datas/Lectin/Wu/weights ^
-  --model_name YIN-HS-RAW ^
-  --training_epochs 100 ^
+  --img_path ./datas/Lectin/green_computing/training-data/ZHE-WEI-2D/images ^
+  --mask_path ./datas/Lectin/green_computing/training-data/ZHE-WEI-2D/masks ^
+  --save_path ./datas/Lectin/green_computing/weights/ZHE-WEI_Test ^
+  --model_name ZHE-WEI_Test ^
+  --training_epochs 10 ^
   --training_batch_size 64 ^
   --training_patch_size 1 32 32 ^
   --training_overlay 0 0 0 ^
@@ -78,7 +78,7 @@ from utils.visualization import visualize_dataset
 
 
 train_transform = Compose([
-    ScaleIntensityRanged(keys=["image"], a_min=0, a_max=1000, b_min=0.0, b_max=1.0, clip=True),
+    ScaleIntensityRanged(keys=["image"], a_min=0, a_max=50000, b_min=0.0, b_max=1.0, clip=True),
     NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
     ToTensord(keys=["image", "mask"], dtype=torch.float32),
     # RandFlipd(keys=["image", "mask"], spatial_axis=1, prob=0.5),
@@ -93,13 +93,13 @@ train_transform = Compose([
 ])
 
 val_transform = Compose([
-    ScaleIntensityRanged(keys=["image"], a_min=0, a_max=1000, b_min=0.0, b_max=1.0, clip=True),
+    ScaleIntensityRanged(keys=["image"], a_min=0, a_max=50000, b_min=0.0, b_max=1.0, clip=True),
     NormalizeIntensityd(keys=["image"], nonzero=True , channel_wise=True),
     ToTensord(keys=["image", "mask"], dtype=torch.float32),
-    RandAdjustContrastd(keys=["image"], prob=0.3),
-    RandBiasFieldd(keys=["image"], prob=0.2),
-    RandShiftIntensityd(keys=["image"], offsets=0.2, prob=0.3),
-    RandScaleIntensityd(keys=["image"], factors=0.2, prob=0.3),
+    # RandAdjustContrastd(keys=["image"], prob=0.3),
+    # RandBiasFieldd(keys=["image"], prob=0.2),
+    # RandShiftIntensityd(keys=["image"], offsets=0.2, prob=0.3),
+    # RandScaleIntensityd(keys=["image"], factors=0.2, prob=0.3),
     # RandZoomd(keys=["image", "mask"], min_zoom=0.9, max_zoom=1.1, prob=0.2),
     # GaussianSmoothd(keys=["mask"], sigma=1.0),
     AsDiscreted(keys=["mask"], threshold= 0.5) # Already commented out, which is correct.

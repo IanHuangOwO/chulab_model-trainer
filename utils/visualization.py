@@ -148,13 +148,13 @@ def visualize_dataset(
 
         sample_data = {"idx": i, "image": image_2d}
         if mask_2d is not None:
-            sample_data["mask"] = mask_2d
+            sample_data["mask"] = (mask_2d > 0.5).astype(np.uint8)
         
         if pred is not None:
             # Slice the prediction here using the z_index from the image/mask
             pred_np = _squeeze_channel(pred)
             pred_2d = pred_np[z_index] if pred_np.ndim == 3 else pred_np
-            sample_data["pred"] = pred_2d
+            sample_data["pred"] = (pred_2d > 0.5).astype(np.uint8)
 
         selected_samples.append(sample_data)
 
